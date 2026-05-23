@@ -1,0 +1,202 @@
+﻿@startuml Ping404-Unified
+
+allowmixing
+
+skinparam classAttributeIconSize 0
+skinparam packageStyle rectangle
+skinparam linetype polyline
+skinparam nodesep 30
+skinparam ranksep 40
+
+title Ping 404 - Architecture and Design Patterns
+
+package "LibGDX Game Framework" #E8E8E8 {
+    interface ApplicationListener <<interface>> {
+        + create()
+        + render()
+        + dispose()
+    }
+    class ApplicationAdapter <<abstract>>
+    class AndroidApplication <<abstract>>
+    ApplicationAdapter ..|> ApplicationListener
+}
+
+package "Android (client)" #DDEEFF {
+    class AndroidLauncher
+    class AndroidGameClient <<View + Controller>> {
+        + create()
+        + render()
+        + dispose()
+    }
+    AndroidLauncher --> AndroidGameClient
+}
+
+package "Desktop (client)" #DDEEFF {
+    class DesktopLauncher
+    class GameClientScreen <<View + Controller>> {
+        + create()
+        + render()
+        + dispose()
+    }
+    DesktopLauncher --> GameClientScreen
+}
+
+AndroidLauncher --|> AndroidApplication
+AndroidGameClient --|> ApplicationAdapter
+GameClientScreen --|> ApplicationAdapter
+
+package "Facade Client-side API (core/)" #FFFFF0 {
+    class NetworkClient <<Facade>> {
+        + connect(host)
+        + disconnect()
+        + sendTCP(packet)
+        + sendUDP(packet)
+    }
+    interface NetworkListener <<Observer>> {
+        + onConnected()
+        + onDisconnected()
+        + onReceived(packet)
+    }
+    NetworkClient *--> "0..*" NetworkListener : notifies
+}
+
+package "Facade Server-side API (core/)" #F0FFF0 {
+    class NetworkServer <<Facade>> {
+        + start()
+        + stop()
+        + sendToAllTCP(packet)
+        + sendToAllExceptUDP(id, packet)
+    }
+    interface ServerListener <<Observer>> {
+        + onClientConnected(conn)
+        + onClientDisconnected(conn)
+        + onReceived(conn, packet)
+    }
+    class "PlayerConnection" as NSPlayerConn {
+        + playerName
+        + x, y
+    }
+    NetworkServer *--> "0..*" ServerListener : notifies
+    NetworkServer *--> NSPlayerConn : manages
+}
+
+package "KryoNet Networking" #E8E8E8 {
+    class "Client" as KClient {
+        + connect(host, tcp, udp)
+        + sendTCP(packet)
+        + sendUDP(packet)
+        + addListener(listener)
+        + getKryo()
+    }
+    class "Server" as KServer {
+        + bind(tcp, udp)
+        + sendToAllTCP(packet)
+        + sendToTCP(id, packet)
+        + addListener(listener)
+        + getKryo()
+    }
+    abstract class "Listener" as KListener {
+        + connected(conn)
+        + disconnected(conn)
+        + received(conn, obj)
+    }
+}
+
+package "Kryo Serialization" #E8E8E8 {
+    class Kryo {
+        + register(type)
+    }
+}
+
+NetworkClient --> KClient : wraps
+NetworkServer --> KServer : wraps
+KClient --> Kryo : getKryo()
+KServer --> Kryo : getKryo()
+
+package "server" #E0FFE0 {
+    class GameServer <<Controller>> {
+        + start()
+        + stop()
+        + startGameLoop(room)
+        + stopGameLoop(roomId)
+        - onReceived(conn, packet)
+    }
+    class ServerLauncher {
+        + {static} main()
+    }
+    ServerLauncher --> GameServer
+}
+
+package "server - Game Loop Orchestration (#18)" #E0FFE0 {
+    class GameLoop <<Consumer>> {
+        + start() / stop()
+        + tick(deltaTime)
+        - processInputQueue()
+        - broadcastState()
+        - checkWinCondition()
+    }
+    class GameTickProcessor <<Application Service>> {
+        + processTick(dt): GoalResult
+        ~ updatePuckPosition(dt)
+        ~ applyRules(dt)
+        ~ updateScore(goalResult)
+        ~ checkGameOver()
+    }
+    class InputQueue <<Buffer>> {
+        + enqueue(InputEvent)
+        + drainAll(): List
+    }
+    GameLoop --> GameTickProcessor : delegates tick
+    GameLoop --> InputQueue : drains per tick
+}
+
+package "server - Command Handlers (#18)" #FFE8E8 {
+    interface PacketHandlerCommand <<Command>> {
+        + handle(conn, packet)
+    }
+    class PositionHandlerCommand <<Command>>
+    class PauseHandlerCommand <<Command>>
+    class ResumeHandlerCommand <<Command>>
+    PositionHandlerCommand ..|> PacketHandlerCommand
+    PauseHandlerCommand ..|> PacketHandlerCommand
+    ResumeHandlerCommand ..|> PacketHandlerCommand
+}
+
+PacketHandlerCommand --> InputQueue : enqueue (Producer)
+GameServer --> GameLoop : manages lifecycle
+GameServer --> PacketHandlerCommand : dispatches packets
+
+package "core - Collision Detection" #FFFFD0 {
+    class CollisionDetector <<Core Logic>> {
+        + {static} resolveTick(state, dt): TickResult
+    }
+}
+
+GameTickProcessor --> CollisionDetector : CALLS (never implements)
+
+GameServer ..|> ServerListener
+GameServer --> NetworkServer
+
+AndroidGameClient --> NetworkClient : uses
+AndroidGameClient ..|> NetworkListener : via adapter
+GameClientScreen --> NetworkClient : uses
+GameClientScreen ..|> NetworkListener : via adapter
+
+note right of GameServer
+    **Server-authoritative** (TC6)
+    FR5.1 Host / FR2.1 Validates
+    FR2.9 Win/Lose / FR2.5 Updates
+end note
+
+note right of GameTickProcessor
+    **Application Service** (#18)
+    Orchestrates tick order:
+    puck -> collisions -> score -> game-over
+    Calls Core logic, never implements it.
+end note
+
+note bottom of NetworkClient
+    FR5.2 Join / FR5.4 Disconnect
+end note
+
+@enduml

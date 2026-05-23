@@ -1,0 +1,36 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "java",
+            "name": "Server",
+            "request": "launch",
+            "mainClass": "no.ntnu.ping404.server.ServerLauncher",
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}/server"
+        },
+        {
+            "type": "java",
+            "name": "Desktop Client 1",
+            "request": "launch",
+            "mainClass": "no.ntnu.ping404.desktop.DesktopLauncher",
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}/assets"
+        },
+        {
+            "type": "java",
+            "name": "Desktop Client 2",
+            "request": "launch",
+            "mainClass": "no.ntnu.ping404.desktop.DesktopLauncher",
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}/assets"
+        }
+    ],
+    "compounds": [
+        {
+            "name": "Server + 2 Clients",
+            "configurations": ["Server", "Desktop Client 1", "Desktop Client 2"],
+            "stopAll": true
+        }
+    ]
+}

@@ -1,0 +1,102 @@
+buildscript {
+    repositories {
+        mavenCentral()
+        google()
+    }
+}
+apply plugin: 'com.android.application'
+
+android {
+    namespace = "no.ntnu.ping404"
+    compileSdk = 35
+
+    sourceSets {
+        main {
+            manifest.srcFile 'AndroidManifest.xml'
+            java.setSrcDirs(['src/main/java'])
+            res.setSrcDirs(['res'])
+            assets.setSrcDirs(['../assets'])
+            jniLibs.setSrcDirs(['libs'])
+        }
+    }
+
+    defaultConfig {
+        applicationId 'no.ntnu.ping404'
+        minSdkVersion 21
+        targetSdkVersion 35
+        versionCode 1
+        versionName "1.0"
+    }
+
+    compileOptions {
+        sourceCompatibility "17"
+        targetCompatibility "17"
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+
+    lint {
+        checkReleaseBuilds false
+        abortOnError false
+    }
+}
+
+// Disable lint tasks - AGP lint analyzer crashes under Java 25
+afterEvaluate {
+    tasks.matching { it.name.toLowerCase().contains('lint') }.configureEach {
+        enabled = false
+    }
+}
+
+repositories {
+    google()
+}
+
+configurations { natives }
+
+dependencies {
+    implementation "com.badlogicgames.gdx:gdx-backend-android:$gdxVersion"
+    implementation project(':core')
+
+    natives "com.badlogicgames.gdx:gdx-platform:$gdxVersion:natives-arm64-v8a"
+    natives "com.badlogicgames.gdx:gdx-platform:$gdxVersion:natives-armeabi-v7a"
+    natives "com.badlogicgames.gdx:gdx-platform:$gdxVersion:natives-x86"
+    natives "com.badlogicgames.gdx:gdx-platform:$gdxVersion:natives-x86_64"
+}
+
+// Extract native libraries from dependencies into libs folder
+tasks.register('copyAndroidNatives') {
+    doFirst {
+        file("libs/armeabi-v7a/").mkdirs()
+        file("libs/arm64-v8a/").mkdirs()
+        file("libs/x86/").mkdirs()
+        file("libs/x86_64/").mkdirs()
+        configurations.natives.files.each { jar ->
+            def outputDir = null
+            if (jar.name.endsWith("natives-arm64-v8a.jar")) outputDir = file("libs/arm64-v8a")
+            if (jar.name.endsWith("natives-armeabi-v7a.jar")) outputDir = file("libs/armeabi-v7a")
+            if (jar.name.endsWith("natives-x86.jar")) outputDir = file("libs/x86")
+            if (jar.name.endsWith("natives-x86_64.jar")) outputDir = file("libs/x86_64")
+            if (outputDir != null) {
+                copy {
+                    from zipTree(jar)
+                    into outputDir
+                    include "*.so"
+                }
+            }
+        }
+    }
+}
+
+tasks.named('preBuild').configure {
+    dependsOn 'copyAndroidNatives'
+}
+
+tasks.matching { it.name.startsWith('merge') && (it.name.contains('JniLibFolders') || it.name.contains('NativeLibs')) }.configureEach {
+    dependsOn 'copyAndroidNatives'
+}

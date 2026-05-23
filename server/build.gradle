@@ -1,0 +1,24 @@
+plugins {
+    id "application"
+}
+
+application.mainClass = 'no.ntnu.ping404.server.ServerLauncher'
+eclipse.project.name = appName + '-server'
+java.sourceCompatibility = 17
+java.targetCompatibility = 17
+
+dependencies {
+    implementation project(':core')
+    implementation 'org.slf4j:slf4j-simple:2.0.9'
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.10.0'
+    testImplementation 'ch.qos.logback:logback-classic:1.4.14'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher:1.10.0'
+}
+
+configurations.testRuntimeClasspath {
+    exclude group: 'org.slf4j', module: 'slf4j-simple'
+}
+
+test {
+    useJUnitPlatform()
+}

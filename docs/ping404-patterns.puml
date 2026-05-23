@@ -1,0 +1,263 @@
+﻿@startuml Ping404-Patterns
+
+allowmixing
+
+skinparam classAttributeIconSize 0
+skinparam packageStyle rectangle
+skinparam linetype polyline
+skinparam nodesep 30
+skinparam ranksep 45
+
+title Ping 404 - Design Patterns (by Relationship Layer)
+
+
+package "Client-Server Pattern" #DDEEFF {
+    rectangle "Android Client  (AndroidGameClient)" as AClient #DDEEFF
+    rectangle "Desktop Client  (GameClientScreen)" as DClient #DDEEFF
+    rectangle "GameServer  (server-authoritative)" as SrvCS #E0FFE0
+}
+
+AClient --> SrvCS : send input (UDP/TCP)
+DClient --> SrvCS : send input (UDP/TCP)
+SrvCS --> AClient : broadcast state
+SrvCS --> DClient : broadcast state
+
+package "Connector Pattern (Dual Protocol)" #FFF5EE {
+    class "TCP Connector" as TCP <<Connector>> {
+        Reliable delivery
+        Login, Goals, Chat, GameOver
+    }
+    class "UDP Connector" as UDP <<Connector>> {
+        Fast, unreliable
+        PlayerPosition, Puck (~20 Hz)
+    }
+}
+
+package "Facade Pattern" #FFFFF0 {
+    class NetworkClient <<Facade>> {
+        + connect(host)
+        + sendTCP(packet)
+        + sendUDP(packet)
+        + disconnect()
+    }
+    class NetworkServer <<Facade>> {
+        + start()
+        + sendToAllTCP(packet)
+        + sendToAllExceptUDP(id, packet)
+        + stop()
+    }
+}
+
+NetworkClient --> TCP : sendTCP()
+NetworkClient --> UDP : sendUDP()
+NetworkServer --> TCP : sendToAllTCP()
+NetworkServer --> UDP : sendToAllExceptUDP()
+
+package "Registry Pattern" #FFFEE0 {
+    class PacketRegistry <<Registry>> {
+        + {static} register(kryo)
+    }
+    class Kryo <<Serialization>> {
+        + register(type)
+    }
+    PacketRegistry --> Kryo : registers packets (identical order client + server, TC4)
+}
+
+note bottom of "Client-Server Pattern"
+    FR5.1 Host Game
+    FR5.2 Join Game
+    FR5.4 Disconnect
+end note
+
+package "Command Pattern - Packets (core/)" #FFEEFF {
+    together {
+        class LoginRequest <<Command>>
+        class LoginResponse <<Command>>
+        class PlayerPosition <<Command>>
+        class ChatMessage <<Command>>
+        class PlayerJoined <<Command>>
+        class PlayerLeft <<Command>>
+        class Ping <<Command>>
+        class Pong <<Command>>
+    }
+}
+
+note right of "Command Pattern - Packets (core/)"
+    FR2.1 Server-authoritative validation
+    FR2.5 Real-time position updates
+    FR2.7 Multiplayer interaction
+end note
+
+package "Command Pattern - Server Handlers (#18)" #FFE8E8 {
+    interface PacketHandlerCommand <<Command>> {
+        + handle(connection, packet)
+    }
+    class PositionHandlerCommand <<Command>>
+    class PauseHandlerCommand <<Command>>
+    class ResumeHandlerCommand <<Command>>
+    PositionHandlerCommand ..|> PacketHandlerCommand
+    PauseHandlerCommand ..|> PacketHandlerCommand
+    ResumeHandlerCommand ..|> PacketHandlerCommand
+}
+
+note right of "Command Pattern - Server Handlers (#18)"
+    Commands handle incoming packets (network concern).
+    Domain updates delegated to GameLoop via InputQueue.
+    Commands enqueue to InputQueue (Producer side).
+end note
+
+package "Observer Pattern" #FFF0FF {
+    interface NetworkListener <<Observer>> {
+        + onConnected()
+        + onDisconnected()
+        + onReceived(packet)
+    }
+    interface ServerListener <<Observer>> {
+        + onClientConnected(conn)
+        + onClientDisconnected(conn)
+        + onReceived(conn, packet)
+    }
+    note right of NetworkListener
+        Implemented by clients (AndroidGameClient, GameClientScreen)
+        via adapter
+    end note
+    note right of ServerListener
+        Implemented by GameServer
+    end note
+}
+
+NetworkClient *--> "0..*" NetworkListener : notifies
+NetworkServer *--> "0..*" ServerListener : notifies
+
+package "Producer-Consumer Pattern (Client)" #E8F0FF {
+    class "KryoNet Network Thread" as NetThread <<Producer>>
+    class "Thread-Safe Buffer" as Buffer <<Buffer>> {
+        ConcurrentHashMap
+        CopyOnWriteArrayList
+    }
+    class "LibGDX Render Thread" as RenderThread <<Consumer>>
+    NetThread --> Buffer : writes
+    Buffer --> RenderThread : reads
+}
+
+note bottom of "Producer-Consumer Pattern (Client)"
+    TC5: Prevents race conditions
+    between network and game threads.
+end note
+
+package "Producer-Consumer - Server Game Loop (#18)" #E0F0FF {
+    class "Command Handlers (Network Thread)" as CmdProducer <<Producer>>
+    class InputQueue <<Buffer>> {
+        ConcurrentLinkedQueue
+        + enqueue(InputEvent)
+        + drainAll(): List
+    }
+    class GameLoop <<Consumer>> {
+        + start() / stop()
+        + tick(deltaTime)
+        - processInputQueue()
+        - broadcastState()
+    }
+    CmdProducer --> InputQueue : enqueue InputEvent
+    InputQueue --> GameLoop : drainAll() per tick
+}
+
+note bottom of "Producer-Consumer - Server Game Loop (#18)"
+    Issue #18: Decouples network I/O from server game logic.
+    Commands only enqueue; GameLoop owns the domain tick.
+    60 Hz fixed tick rate with broadcast after each tick.
+end note
+
+package "Application Service Pattern (#18)" #F0FFE0 {
+    class GameTickProcessor <<Application Service>> {
+        + processTick(deltaTime): GoalResult
+        ~ updatePuckPosition(deltaTime)
+        ~ applyRules(deltaTime)
+        ~ updateScore(goalResult)
+        ~ checkGameOver()
+    }
+    class CollisionDetector <<Core Logic>> {
+        + {static} resolveTick(state, dt): TickResult
+    }
+    GameTickProcessor --> CollisionDetector : CALLS (never implements)
+}
+
+note bottom of "Application Service Pattern (#18)"
+    Orchestrates game logic per tick without owning physics.
+    Tick order: updatePuckPosition -> applyRules -> updateScore -> checkGameOver
+end note
+
+GameLoop --> GameTickProcessor : delegates tick logic
+
+package "State Pattern - Game Phases (#18)" #FFF8E0 {
+    enum Phase <<State>> {
+        WAITING
+        COUNTDOWN
+        PLAYING
+        PAUSED
+        FINISHED
+    }
+}
+
+note bottom of "State Pattern - Game Phases (#18)"
+    Phase-dependent behaviour:
+    WAITING  -> accept joins, no physics
+    PLAYING  -> run game tick + broadcast
+    PAUSED   -> skip physics, keep state
+    FINISHED -> stop loop, broadcast GameOver
+end note
+
+GameLoop --> Phase : reads/sets phase
+GameTickProcessor --> Phase : sets FINISHED on win
+
+
+frame "Layered Architecture" #F8F8F8 {
+    rectangle "Presentation Layer (android/, desktop/)" as PL #DDEEFF
+    rectangle "Application Layer (server/)" as AL #E0FFE0
+    rectangle "Network Layer (core/)" as NL #FFFFD0
+    PL --> AL : sends input
+    AL --> NL : uses facades
+    NL --> PL : delivers callbacks
+}
+
+frame "MVC Pattern" #F8F8FF {
+    rectangle "Model (GameState, Puck, Player, Score)" as Model #FFFFD0
+    rectangle "View (GameClientScreen, LibGDX rendering)" as View #DDEEFF
+    rectangle "Controller (Input handlers, NetworkListener)" as Ctrl #E0FFE0
+    Ctrl --> Model : updates
+    Model --> View : observed
+    View --> Ctrl : user input
+}
+
+note as DataFlow
+    **Data Flow (client -> server -> clients):**
+    1. User touch -> **Client Controller** (input handler)
+    2. Controller creates **Command** packet (e.g. PlayerPosition)
+    3. Sent via **Connector** (UDP) to server
+    4. **Command Handler** enqueues to **InputQueue** (Producer)
+    5. **GameLoop** drains InputQueue per tick (Consumer)
+    6. **GameTickProcessor** orchestrates: puck -> collisions -> score -> game-over
+    7. **GameLoop** broadcasts updated **GameStateSnapshot** to all clients
+    8. Clients receive via **Observer** (NetworkListener)
+    9. **Producer-Consumer**: network thread -> buffer -> render thread
+    10. **Model** updated -> **View** renders frame
+end note
+
+legend bottom left
+  |= Layer |= Pattern |= Implementation |= FR / Issue |
+  | Network | Client-Server | Clients and GameServer | FR5.1 |
+  | Network | Connector | TCP (reliable) + UDP (fast) | FR2.5 |
+  | Network | Facade | NetworkClient, NetworkServer | FR5.2 FR5.4 |
+  | Network | Registry | PacketRegistry and Kryo (TC4) | -- |
+  | Messages | Command (Packets) | Packet classes (9 types) | FR2.1 |
+  | Messages | Command (Handlers) | PacketHandlerCommand impls | #18 |
+  | Messages | Observer | NetworkListener, ServerListener | FR2.5 FR2.7 |
+  | Messages | Producer-Consumer (client) | Net thread to buffer to render (TC5) | -- |
+  | Game Loop | Producer-Consumer (server) | Handlers to InputQueue to GameLoop | #18 |
+  | Game Loop | Application Service | GameTickProcessor orchestrates tick | #18 |
+  | Game Loop | State | GameState.Phase (WAITING to FINISHED) | #18 |
+  | Structure | Layered | Presentation / Application / Network | -- |
+  | Structure | MVC | Model / View / Controller | -- |
+endlegend
+
+@enduml

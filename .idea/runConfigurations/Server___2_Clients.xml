@@ -1,0 +1,7 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="Server + 2 Clients" type="CompoundRunConfigurationType" factoryName="CompoundRunConfigurationType">
+    <toRun name="Server" type="Application" />
+    <toRun name="Desktop Client 1" type="Application" />
+    <toRun name="Desktop Client 2" type="Application" />
+  </configuration>
+</component>

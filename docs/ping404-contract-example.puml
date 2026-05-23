@@ -1,0 +1,162 @@
+@startuml ping404-contract-example
+
+skinparam classAttributeIconSize 0
+skinparam packageStyle rectangle
+skinparam linetype polyline
+skinparam nodesep 25
+skinparam ranksep 35
+
+title core/ - The Shared Contract
+
+rectangle "Client Side" as ClientSide #DDEEFF {
+    class AndroidGameClient {
+        implements NetworkListener
+        uses NetworkClient
+    }
+    class GameClientScreen {
+        implements NetworkListener
+        uses NetworkClient
+    }
+}
+
+rectangle "Server Side" as ServerSide #E0FFE0 {
+    class GameServer {
+        implements ServerListener
+        uses NetworkServer
+    }
+}
+
+package "core/ - Shared Contract" #FFFFD0 {
+
+    package "Callback Interfaces" #FFFFF0 {
+        interface NetworkListener <<client-side>> {
+            + onConnected()
+            + onDisconnected()
+            + onReceived(packet)
+        }
+        interface ServerListener <<server-side>> {
+            + onClientConnected(conn)
+            + onClientDisconnected(conn)
+            + onReceived(conn, packet)
+        }
+    }
+
+    package "Message Format - Packets" #FFEEFF {
+        class LoginRequest {
+            + playerName : String
+        }
+        class LoginResponse {
+            + success : boolean
+            + playerId : int
+            + message : String
+        }
+        class PlayerPosition {
+            + playerId : int
+            + x : float
+            + y : float
+        }
+        class ChatMessage {
+            + playerId : int
+            + message : String
+            + messageType : MessageType
+        }
+        class PlayerJoined {
+            + playerId : int
+            + playerName : String
+        }
+        class PlayerLeft {
+            + playerId : int
+        }
+        class PlayerList {
+            + players : List<PlayerEntry>
+        }
+        class Ping {
+            + timestamp : long
+        }
+        class Pong {
+            + timestamp : long
+        }
+    }
+
+    package "Serialization Registry" #FFFEE0 {
+        class PacketRegistry <<Registry>> {
+            + {static} register(kryo)
+            --
+            Registration order must be
+            identical on client + server
+        }
+    }
+
+    package "Configuration" #FFE0C0 {
+        class NetworkConfig <<utility>> {
+            + TCP_PORT = 27960
+            + UDP_PORT = 27961
+            + DEFAULT_HOST = "localhost"
+            + CONNECTION_TIMEOUT = 5000
+            + MAX_PLAYERS = 100
+            + POSITION_UPDATE_RATE = 1/20
+        }
+    }
+
+    package "Facade APIs" #F8F8F8 {
+        class NetworkClient <<Facade>> {
+            + connect(host)
+            + disconnect()
+            + sendTCP(packet)
+            + sendUDP(packet)
+        }
+        class NetworkServer <<Facade>> {
+            + start()
+            + stop()
+            + sendToAllTCP(packet)
+            + sendToAllExceptUDP(id, packet)
+        }
+    }
+
+    PacketRegistry --> LoginRequest : registers
+    PacketRegistry --> LoginResponse : registers
+    PacketRegistry --> PlayerPosition : registers
+    PacketRegistry --> ChatMessage : registers
+    PacketRegistry --> PlayerJoined : registers
+    PacketRegistry --> PlayerLeft : registers
+    PacketRegistry --> PlayerList : registers
+    PacketRegistry --> Ping : registers
+    PacketRegistry --> Pong : registers
+
+    NetworkClient *--> "0..*" NetworkListener : notifies
+    NetworkServer *--> "0..*" ServerListener : notifies
+}
+
+' =================================================================
+'  DEPENDENCY ARROWS - both sides import core/
+' =================================================================
+
+ClientSide -down-> NetworkListener : implements
+ClientSide -down-> NetworkClient : uses
+ServerSide -down-> ServerListener : implements
+ServerSide -down-> NetworkServer : uses
+
+' =================================================================
+'  NOTES
+' =================================================================
+
+note top of "core/ - Shared Contract"
+    **Contract-First Development**
+    1. Team agrees on packets, interfaces, config
+    2. Client + Server developers work in parallel
+    3. Both import core/ - the contract is enforced at compile time
+end note
+
+note bottom of PacketRegistry
+    **TC4:** Registration order must match
+    on both sides - otherwise Kryo
+    deserialization fails silently.
+end note
+
+note right of NetworkConfig
+    Single source of truth
+    for ports, timeouts,
+    and game constants.
+end note
+
+@enduml

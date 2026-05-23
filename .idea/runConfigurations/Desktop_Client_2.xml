@@ -1,0 +1,10 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="Desktop Client 2" type="Application" factoryName="Application">
+    <option name="MAIN_CLASS_NAME" value="no.ntnu.ping404.desktop.DesktopLauncher" />
+    <module name="Ping404.desktop.main" />
+    <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/assets" />
+    <method v="2">
+      <option name="Make" enabled="true" />
+    </method>
+  </configuration>
+</component>

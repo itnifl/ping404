@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test-server:
+    name: Server tests
+    runs-on: ubuntu-latest
+    continue-on-error: true
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+
+      - name: Make Gradle wrapper executable
+        run: chmod +x gradlew
+
+      - name: Run server tests
+        run: ./gradlew :server:test
+
+      - name: Upload HTML test report
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: server-test-report
+          path: server/build/reports/tests/test/

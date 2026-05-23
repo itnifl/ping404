@@ -1,0 +1,56 @@
+buildscript {
+    repositories {
+        mavenCentral()
+        gradlePluginPortal()
+        google()
+    }
+    dependencies {
+        classpath 'com.android.tools.build:gradle:9.1.1'
+    }
+}
+
+allprojects {
+    apply plugin: 'eclipse'
+    apply plugin: 'idea'
+
+    repositories {
+        mavenCentral()
+        google()
+        maven { url 'https://jitpack.io' }
+    }
+
+    group = 'no.ntnu.ping404'
+    version = '1.0.0'
+}
+
+ext {
+    kryonetVersion = '2.22.0-RC1'
+}
+
+configure(subprojects - project(':android')) {
+    apply plugin: 'java-library'
+
+    java.sourceCompatibility = 17
+    java.targetCompatibility = 17
+
+    compileJava {
+        options.incremental = true
+        options.encoding = 'UTF-8'
+    }
+}
+
+project(':core') {
+    // Shared platform-independent code
+}
+
+project(':android') {
+    // Android client
+}
+
+project(':desktop') {
+    // Desktop client for testing
+}
+
+project(':server') {
+    // Dedicated server application
+}
