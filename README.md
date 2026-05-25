@@ -264,29 +264,7 @@ flowchart TD
 
  [View Figma Design](https://www.figma.com/design/6OVbMLWTUK2wPVBSSgEzwj/PING-404?m=auto&t=V1meK16OeSllh9yT-6)
 
- #### Home Screen
- ![Home Screen](./screenshots/homepage.png)
-
- #### Host Game Screens
- ![Host Game Screens](./screenshots/host.png)
  
- #### Join Game Screens
- ![Dashboard](./screenshots/join.png)
- 
- #### Settings Screen
- ![Settings](./screenshots/settings.png)
- 
- #### Game Settings Screen
- ![Game settings](./screenshots/gamesettings.png)
- 
- #### Game Screen
- ![Game](./screenshots/game.png)
- 
- #### Pause Screen
- ![Pause](./screenshots/pause.png)
- 
- #### Game Over and You Won Screens
- ![Game Over/You Won](./screenshots/GAME_OVER_SCREEN.png)
 ---
 
 ### Functional Requirements
