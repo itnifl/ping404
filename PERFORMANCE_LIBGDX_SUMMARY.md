@@ -6,7 +6,7 @@ Date: 2026-05-26
 
 ### 1.1 Server simulation and timing
 
-Rationale: A fixed time step keeps simulation behavior predictable and avoids drift under varying load.
+A nanosecond accumulator with sleep then catch up gives a stable 60 Hz delta to the physics step, which the deterministic collision code requires to produce identical results across clients. The catch up skip threshold trades short term temporal accuracy for recovery, because unbounded catch up after a GC pause or thread starvation would cascade into more jitter rather than recovering. Sleeping before the deadline (instead of busy spinning) avoids burning CPU that other rooms in the same JVM need.
 
 1. The server uses a dedicated fixed tick loop, target 60 Hz by default.
 2. Tick timing is based on nanoseconds.
@@ -20,7 +20,7 @@ Primary references:
 
 ### 1.2 Broadcast rate limiting and adaptive backpressure
 
-Rationale: Capping and adapting broadcast frequency prevents overload while preserving playable state updates.
+The broadcast cap is decoupled from the simulation tick so the server can simulate at 60 Hz while sending at a lower fixed rate (for example 30 Hz), reducing per client bandwidth and serialization cost without affecting physics fidelity. The adaptive multiplier (1x, 2x, 4x) reacts to loop jitter and metrics queue depth, which are the two earliest leading indicators of overload, so the server sheds outbound work before TCP buffers and Kryo write queues start growing.
 
 1. State snapshots are broadcast at a capped rate, independent from simulation tick rate.
 2. Effective broadcast interval is dynamically increased under load.
@@ -34,7 +34,7 @@ Primary references:
 
 ### 1.3 Snapshot coalescing instead of backlog growth
 
-Rationale: Sending only the latest snapshot avoids stale backlog growth and reduces wasted bandwidth.
+A single mutable `pendingStateSnapshot` field replaces any unsent state every tick, so when the broadcast interval finally elapses only the newest world state is serialized and sent. This avoids a queue of obsolete snapshots that would each cost serialization, bandwidth, and effectively raise client perceived latency, while preserving the property that clients always converge to the most recent authoritative state.
 
 1. The loop keeps a pending state snapshot buffer.
 2. Intermediate stale snapshots are replaced by fresh state.
@@ -46,7 +46,7 @@ Primary reference:
 
 ### 1.4 Producer consumer decoupling across critical paths
 
-Rationale: Queue boundaries isolate slow work so simulation and network threads stay responsive.
+KryoNet callbacks run on a single I O thread, so any handler that blocks (room creation, metrics IO, logging) would stall every connection. Pushing events onto `LinkedBlockingQueue` instances handled by dedicated consumer threads keeps the network thread strictly bounded to deserialize and enqueue. The same pattern in `InputQueue` lets the game loop pull inputs exactly at tick boundaries, which gives deterministic input ordering relative to physics.
 
 1. Game input from network handlers is queued and drained once per tick.
 2. Server network events are queued off the KryoNet I/O thread.
@@ -62,7 +62,7 @@ Primary references:
 
 ### 1.5 Bounded queues and explicit drop accounting
 
-Rationale: Hard queue limits protect memory, and drop counters make overload visible instead of silent.
+A `LinkedBlockingQueue` with `MAX_QUEUE_CAPACITY = 10_000` plus non blocking `offer()` ensures the producing thread (game loop) never blocks on the metrics consumer, even if disk IO or log encoding stalls. Drops are counted in an `AtomicLong` rather than silently lost, so backpressure logic can read the counter and downstream operators can detect when sampling fidelity is degraded.
 
 1. Metrics ingestion queue has a fixed max capacity.
 2. Overflowed events are dropped instead of allowing unbounded memory growth.
@@ -73,7 +73,7 @@ Primary reference:
 
 ### 1.6 Transport split by packet type
 
-Rationale: Using UDP for fast updates and TCP for critical flow balances latency and reliability.
+`PlayerPosition`, `Ping`, and `Pong` are sent over UDP because losing one out of N updates is irrelevant when a newer position arrives within milliseconds, and TCP head of line blocking would force the whole position stream to wait on a single retransmission. Match lifecycle, score, and lobby packets use TCP because exactly once ordered delivery is required to keep client and server state machines in agreement.
 
 1. Latency sensitive high rate packets use UDP, for example player position and heartbeat packets.
 2. Reliability sensitive packets use TCP, for example control and match flow events.
@@ -84,7 +84,7 @@ Primary reference:
 
 ### 1.7 Heartbeat and stale connection detection
 
-Rationale: Active liveness checks remove dead peers quickly and free server resources.
+Application level `Ping` and `Pong` are used instead of relying on TCP keep alive because OS keep alive intervals are typically tens of minutes and mobile NAT timeouts are far shorter. Round trip timing on the heartbeat also doubles as the RTT signal surfaced to clients in metrics, so one mechanism serves both liveness and observability.
 
 1. Server sends periodic heartbeat pings.
 2. Client responds with pong.
@@ -98,7 +98,7 @@ Primary references:
 
 ### 1.8 Client side smoothing of authoritative snapshots
 
-Rationale: Interpolation improves visual smoothness while keeping server state authoritative.
+A frame rate independent exponential blend (`1 - exp(-BLEND_RATE * dt)`) is used instead of a linear lerp so the same `BLEND_RATE` constant produces identical convergence behavior whether the client runs at 60, 90, or 144 fps. `MAX_EXTRAPOLATION_TIME` caps dead reckoning so that prolonged snapshot loss cannot drift the puck through walls, and `SNAP_THRESHOLD` overrides the blend on large divergence because smoothing across a teleport sized error would look worse than a hard snap.
 
 1. The puck is rendered through interpolation and bounded extrapolation between snapshots.
 2. A snap threshold corrects large divergence quickly.
@@ -112,7 +112,7 @@ Primary references:
 
 ### 1.9 Runtime metrics for observability and control loops
 
-Rationale: Runtime metrics turn performance behavior into measurable signals for tuning and protection.
+Metrics are computed in the same threads that perform the work (tick jitter on the game loop, RTT on the network listener) to avoid sampling skew. Server snapshots are broadcast at 1 Hz to keep telemetry bandwidth negligible compared to gameplay traffic, yet still feed the backpressure controller fast enough to react before queues saturate.
 
 1. Client computes local RTT, snapshot rate, and snapshot jitter.
 2. Server computes tick rate, jitter, drop rates, queue depth, and bandwidth.
@@ -127,7 +127,7 @@ Primary references:
 
 ### 1.10 Physics stability and determinism
 
-Rationale: Deterministic and bounded collision steps improve fairness, repeatability, and runtime stability.
+Substep count is derived from puck travel distance per tick (`ceil(travel / (radius * factor))`) so fast pucks get more substeps and slow pucks pay nothing extra. `MAX_SUBSTEPS = 16` is a hard cap that bounds the worst case cost of one tick, which is essential because the game loop deadline must be honored regardless of input speed. Players are checked in a fixed order so two clients replaying the same input sequence get identical outcomes.
 
 1. Collision resolution uses substeps computed from puck travel distance.
 2. Substeps are capped to prevent runaway CPU cost.
@@ -140,7 +140,7 @@ Primary reference:
 
 ### 1.11 Stall detection and controlled reset logic
 
-Rationale: Stall recovery prevents dead gameplay states and keeps matches progressing.
+`StuckPuckDetector` tracks how long the puck remains in one half above a low speed threshold; when this exceeds the configured timeout the server forces a relaunch toward the conceding side. The same goal reset delay path is reused for stalls, which keeps client side animation expectations consistent (clients always see the same reset sequence whether triggered by a goal or by a stall).
 
 1. A detector tracks how long the puck remains on one half.
 2. If it exceeds timeout, server resets puck and broadcasts reset state.
@@ -154,7 +154,7 @@ Primary references:
 
 ### 1.12 Concurrency primitives and data structures
 
-Rationale: Choosing thread safe structures by access pattern reduces contention and race risk.
+`ConcurrentHashMap` is chosen for room and connection maps because reads dominate (every broadcast iterates connections) and lock striping keeps that read path effectively contention free. `CopyOnWriteArrayList` is used for listener lists where mutation is rare but iteration during dispatch must never throw `ConcurrentModificationException`. `AtomicLong` covers monotonic counters where a full lock would be wasteful, and `volatile` flags handle the `running` / shutdown signal where only visibility (not atomicity) is required.
 
 1. ConcurrentHashMap is used heavily for shared server state.
 2. CopyOnWriteArrayList is used for listener lists where iteration safety is critical.
@@ -170,7 +170,7 @@ Primary references:
 
 ### 1.13 Render thread safety for UI state mutation
 
-Rationale: Enforcing render thread ownership prevents UI races and inconsistent client state.
+LibGDX `OpenGL` and most `Gdx.*` APIs are only safe to call on the render thread, and game state read by `render()` must not change mid frame. Routing every packet handler through `Gdx.app.postRunnable` collapses the threading model on the client to one mutator (render thread) and many readers, which eliminates the need for locks in screen state.
 
 1. Packet handlers post state updates to the LibGDX render thread.
 2. This avoids UI side race conditions between network and render threads.
@@ -181,7 +181,7 @@ Primary references:
 
 ### 1.14 Resource lifetime management
 
-Rationale: Explicit create and dispose discipline prevents leaks and long session degradation.
+LibGDX `Texture`, `BitmapFont`, `SpriteBatch`, `ShapeRenderer`, `Sound`, and `Music` hold native GPU and audio handles that the JVM garbage collector cannot release. Disposing them in matching `dispose()` calls and `hide()` transitions keeps the native memory footprint flat across many screen switches, which is critical on Android where the OS will kill the process under memory pressure.
 
 1. Rendering and audio resources are created in lifecycle entry points.
 2. Textures, fonts, batch, shape renderer, sounds, and music are disposed explicitly.
@@ -194,7 +194,7 @@ Primary references:
 
 ### 1.15 Allocation awareness on hot paths
 
-Rationale: Lower allocation pressure reduces garbage collection spikes during gameplay.
+A single `Vector3 touchPos` field is reused for every `unproject` call, and `GlyphLayout` instances are cached per renderer. The intent is not zero allocation but to eliminate the per frame churn that triggers young generation GC on Android, where collection pauses are visible as frame stutter. Where allocations remain (for example defensive `Vector2` copies in snapshots) they are kept off the per frame path.
 
 1. Reusable touch vectors and layouts are used in rendering and input code.
 2. Some allocations remain, for example Vector2 copies in snapshot creation and getters, but heavy per frame churn is reduced in critical paths.
@@ -208,7 +208,7 @@ Primary references:
 
 ### 2.1 App lifecycle and screen model
 
-Rationale: A clear screen lifecycle keeps navigation, state ownership, and pause and resume handling consistent.
+Using `com.badlogic.gdx.Game` as the root means the framework already routes `pause()`, `resume()`, and `resize()` to the active `Screen`, which is essential on Android where these events fire on every focus change. Implementing flow as discrete screens (`HomeScreen`, `HostScreen`, `JoinScreen`, `GameScreen`, `GameOverScreen`) keeps each scene's resources and input handling local, so disposal is straightforward and screens never leak input processors into the next scene.
 
 1. The game uses com.badlogic.gdx.Game as the app root.
 2. Screens are used for menu, host, join, game, game over, and settings flows.
@@ -219,7 +219,7 @@ Primary reference:
 
 ### 2.2 Platform backends
 
-Rationale: Dedicated launchers use the best backend setup per platform while sharing core logic.
+The desktop launcher uses `Lwjgl3Application` directly so it can configure window size, title, and GL settings explicitly, while the Android launcher extends `AndroidApplication` to integrate with the Activity lifecycle. `useWakelock = true` on Android prevents the screen from dimming during gameplay, which is required because the player's thumb stays in one position and Android would otherwise treat the device as idle.
 
 1. Desktop uses LWJGL3 backend through Lwjgl3Application.
 2. Android uses AndroidApplication backend.
@@ -231,7 +231,7 @@ Primary references:
 
 ### 2.3 Rendering pipeline
 
-Rationale: Direct control over render primitives keeps the frame pipeline simple and predictable.
+`SpriteBatch` is used for text and any textured draw because it batches by texture and minimizes GL state changes, while `ShapeRenderer` is used for the puck, paddles, and board because these are simple geometry that does not need a texture binding. `OrthographicCamera` plus `ExtendViewport` is chosen over `FitViewport` so the playable area stays centered on every aspect ratio without letterboxing, which matters across phone and desktop window sizes.
 
 1. SpriteBatch is used for text and textured drawing.
 2. ShapeRenderer is used for geometric game elements and custom UI.
@@ -245,7 +245,7 @@ Primary references:
 
 ### 2.4 Input model
 
-Rationale: Direct input handling with viewport unprojection gives precise control over gameplay interactions.
+Polling `Gdx.input` directly inside `render()` lets paddle movement react in the same frame the touch occurs, which gives the lowest possible local input latency. `Viewport.unproject` is required because raw touch coordinates are in screen pixels while the game logic operates in world units; doing the conversion through the viewport guarantees the mapping stays correct across resizes and aspect changes without manual math.
 
 1. Gdx.input is used directly for touch and keyboard state.
 2. InputAdapter is used for inline text input and key events.
@@ -260,7 +260,7 @@ Primary references:
 
 ### 2.5 Math and geometry utilities
 
-Rationale: Using LibGDX math types keeps spatial logic compact, fast, and consistent.
+`Vector2` is used for puck position, velocity, and paddle state because the game is strictly 2D; storing only x and y halves memory traffic and removes an unused z component from every snapshot field. `Vector3` is used specifically for `Viewport.unproject` because that API requires a 3D input even in 2D scenes (the z axis carries depth in the projection matrix). `Rectangle` is used for hit testing buttons because its `contains(x, y)` is faster and clearer than manual coordinate comparisons, and `MathUtils.clamp` is used to keep paddle position inside bounds without writing branchy if blocks.
 
 1. Vector2 is used for game state and interpolation vectors.
 2. Vector3 is used for touch unprojection.
@@ -274,7 +274,7 @@ Primary references:
 
 ### 2.6 Audio and preferences
 
-Rationale: Centralized audio and persisted settings improve UX consistency across sessions.
+A single `AudioManager` owns all `Sound` and `Music` handles so a screen transition that forgets to dispose audio cannot leak a handle, and so mute / volume changes apply globally instantly. LibGDX `Preferences` is chosen over rolling a custom file because it already abstracts the platform difference between desktop config files and Android `SharedPreferences`, and it persists session reconnect data (player name, last server) so the user does not retype on every launch.
 
 1. Sound and Music are used through a singleton audio manager.
 2. Preferences API stores audio flags and user settings.
@@ -286,7 +286,7 @@ Primary references:
 
 ### 2.7 Render thread handoff
 
-Rationale: Posting state changes to the render thread prevents cross thread UI mutation errors.
+KryoNet delivers packets on its own thread, but most state read by `render()` (current screen, player list, score, puck snapshot) is not synchronized. `Gdx.app.postRunnable` schedules the mutation to run between frames on the render thread, which makes the update atomic relative to rendering without requiring locks or volatile fields on every UI variable.
 
 1. Gdx.app.postRunnable is used so packet driven UI state changes execute on the render thread.
 
@@ -296,7 +296,7 @@ Primary references:
 
 ### 2.8 Platform specific renderer selection
 
-Rationale: Shared base rendering with platform specializations avoids duplication and keeps behavior aligned.
+`AbstractGameRenderer` holds all the shared draw logic (board, puck, paddles, score), while `DesktopGameRenderer` and `AndroidGameRenderer` only override the parts that differ (touch hint overlays, FPS counter, debug gestures). `GameRendererFactory` picks the correct one based on `Gdx.app.getType()` at startup, so gameplay code never branches on platform during rendering.
 
 1. Runtime platform detection selects desktop or android renderer implementation.
 2. Shared rendering logic stays in an abstract renderer base.
@@ -310,7 +310,7 @@ Primary references:
 
 ### 2.9 Important LibGDX features not used
 
-Rationale: Explicitly listing excluded frameworks clarifies current architecture boundaries and future extension points.
+`Scene2D` is skipped because the UI is sparse (a handful of buttons and labels per screen) and bringing in `Stage` plus `Actor` would add an event system and a second input router that compete with the direct `Gdx.input` polling already used for gameplay. `AssetManager` is skipped because the asset count is small and loading happens once at startup, so synchronous loads keep the code simpler than wiring up async load callbacks. `Box2D` is skipped because puck physics is intentionally a custom solver: an air hockey puck has only one moving body and a few static walls, so a hand written impulse model is both faster and easier to make deterministic than configuring a general physics engine.
 
 1. Scene2D is not used.
 2. AssetManager is not used.
