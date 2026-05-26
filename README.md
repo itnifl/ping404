@@ -108,7 +108,8 @@ If you test with two local clients on the same machine, turn off **Sound Effects
 If one client is an Android emulator and the server runs on your PC, use fo instance `10.0.2.2` (if that is your server IP, or if you are connecting to localhost from and Android Emulator) as server IP in the Android client (not `127.0.0.1`).
 
 ## References
-- Sound effects are from: https://www.epidemicsound.com/sound-effects/search/ 
+- Sound effects are from: https://www.epidemicsound.com/sound-effects/search/
+- Performance tactics and LibGDX usage summary: [PERFORMANCE_LIBGDX_SUMMARY.md](PERFORMANCE_LIBGDX_SUMMARY.md)
 
 ## Testing
 
