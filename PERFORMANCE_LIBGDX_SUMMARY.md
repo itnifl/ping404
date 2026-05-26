@@ -6,6 +6,8 @@ Date: 2026-05-26
 
 ### 1.1 Server simulation and timing
 
+Rationale: A fixed time step keeps simulation behavior predictable and avoids drift under varying load.
+
 1. The server uses a dedicated fixed tick loop, target 60 Hz by default.
 2. Tick timing is based on nanoseconds.
 3. The loop sleeps before tick deadlines.
@@ -13,10 +15,12 @@ Date: 2026-05-26
 5. This limits jitter cascades and protects responsiveness under load.
 
 Primary references:
-1. server/src/main/java/no/ntnu/ping404/server/game/GameLoop.java
-2. core/src/main/java/no/ntnu/ping404/network/GameConfig.java
+1. [server/src/main/java/no/ntnu/ping404/server/game/GameLoop.java](server/src/main/java/no/ntnu/ping404/server/game/GameLoop.java)
+2. [core/src/main/java/no/ntnu/ping404/network/GameConfig.java](core/src/main/java/no/ntnu/ping404/network/GameConfig.java)
 
 ### 1.2 Broadcast rate limiting and adaptive backpressure
+
+Rationale: Capping and adapting broadcast frequency prevents overload while preserving playable state updates.
 
 1. State snapshots are broadcast at a capped rate, independent from simulation tick rate.
 2. Effective broadcast interval is dynamically increased under load.
@@ -25,10 +29,12 @@ Primary references:
 5. This protects network and CPU during overload.
 
 Primary references:
-1. server/src/main/java/no/ntnu/ping404/server/game/BroadcastRateController.java
-2. server/src/main/java/no/ntnu/ping404/server/game/GameLoop.java
+1. [server/src/main/java/no/ntnu/ping404/server/game/BroadcastRateController.java](server/src/main/java/no/ntnu/ping404/server/game/BroadcastRateController.java)
+2. [server/src/main/java/no/ntnu/ping404/server/game/GameLoop.java](server/src/main/java/no/ntnu/ping404/server/game/GameLoop.java)
 
 ### 1.3 Snapshot coalescing instead of backlog growth
+
+Rationale: Sending only the latest snapshot avoids stale backlog growth and reduces wasted bandwidth.
 
 1. The loop keeps a pending state snapshot buffer.
 2. Intermediate stale snapshots are replaced by fresh state.
@@ -36,9 +42,11 @@ Primary references:
 4. This reduces unnecessary network traffic and avoids snapshot queue buildup.
 
 Primary reference:
-1. server/src/main/java/no/ntnu/ping404/server/game/GameLoop.java
+1. [server/src/main/java/no/ntnu/ping404/server/game/GameLoop.java](server/src/main/java/no/ntnu/ping404/server/game/GameLoop.java)
 
 ### 1.4 Producer consumer decoupling across critical paths
+
+Rationale: Queue boundaries isolate slow work so simulation and network threads stay responsive.
 
 1. Game input from network handlers is queued and drained once per tick.
 2. Server network events are queued off the KryoNet I/O thread.
@@ -47,30 +55,36 @@ Primary reference:
 5. This ensures slow handlers do not block simulation or I/O threads.
 
 Primary references:
-1. server/src/main/java/no/ntnu/ping404/server/game/InputQueue.java
-2. core/src/main/java/no/ntnu/ping404/network/NetworkKryoServer.java
-3. core/src/main/java/no/ntnu/ping404/network/NetworkKryoClient.java
-4. server/src/main/java/no/ntnu/ping404/server/metrics/MetricsCollector.java
+1. [server/src/main/java/no/ntnu/ping404/server/game/InputQueue.java](server/src/main/java/no/ntnu/ping404/server/game/InputQueue.java)
+2. [core/src/main/java/no/ntnu/ping404/network/NetworkKryoServer.java](core/src/main/java/no/ntnu/ping404/network/NetworkKryoServer.java)
+3. [core/src/main/java/no/ntnu/ping404/network/NetworkKryoClient.java](core/src/main/java/no/ntnu/ping404/network/NetworkKryoClient.java)
+4. [server/src/main/java/no/ntnu/ping404/server/metrics/MetricsCollector.java](server/src/main/java/no/ntnu/ping404/server/metrics/MetricsCollector.java)
 
 ### 1.5 Bounded queues and explicit drop accounting
+
+Rationale: Hard queue limits protect memory, and drop counters make overload visible instead of silent.
 
 1. Metrics ingestion queue has a fixed max capacity.
 2. Overflowed events are dropped instead of allowing unbounded memory growth.
 3. Dropped event count is tracked for observability.
 
 Primary reference:
-1. server/src/main/java/no/ntnu/ping404/server/metrics/MetricsCollector.java
+1. [server/src/main/java/no/ntnu/ping404/server/metrics/MetricsCollector.java](server/src/main/java/no/ntnu/ping404/server/metrics/MetricsCollector.java)
 
 ### 1.6 Transport split by packet type
+
+Rationale: Using UDP for fast updates and TCP for critical flow balances latency and reliability.
 
 1. Latency sensitive high rate packets use UDP, for example player position and heartbeat packets.
 2. Reliability sensitive packets use TCP, for example control and match flow events.
 3. This balances latency, packet loss tolerance, and consistency needs.
 
 Primary reference:
-1. core/src/main/java/no/ntnu/ping404/network/ClientConnector.java
+1. [core/src/main/java/no/ntnu/ping404/network/ClientConnector.java](core/src/main/java/no/ntnu/ping404/network/ClientConnector.java)
 
 ### 1.7 Heartbeat and stale connection detection
+
+Rationale: Active liveness checks remove dead peers quickly and free server resources.
 
 1. Server sends periodic heartbeat pings.
 2. Client responds with pong.
@@ -78,11 +92,13 @@ Primary reference:
 4. This avoids wasted resources on dead peers.
 
 Primary references:
-1. core/src/main/java/no/ntnu/ping404/network/NetworkKryoServer.java
-2. core/src/main/java/no/ntnu/ping404/network/NetworkKryoClient.java
-3. core/src/main/java/no/ntnu/ping404/network/NetworkConfig.java
+1. [core/src/main/java/no/ntnu/ping404/network/NetworkKryoServer.java](core/src/main/java/no/ntnu/ping404/network/NetworkKryoServer.java)
+2. [core/src/main/java/no/ntnu/ping404/network/NetworkKryoClient.java](core/src/main/java/no/ntnu/ping404/network/NetworkKryoClient.java)
+3. [core/src/main/java/no/ntnu/ping404/network/NetworkConfig.java](core/src/main/java/no/ntnu/ping404/network/NetworkConfig.java)
 
 ### 1.8 Client side smoothing of authoritative snapshots
+
+Rationale: Interpolation improves visual smoothness while keeping server state authoritative.
 
 1. The puck is rendered through interpolation and bounded extrapolation between snapshots.
 2. A snap threshold corrects large divergence quickly.
@@ -91,10 +107,12 @@ Primary references:
 5. This reduces visible stutter while preserving server authority.
 
 Primary references:
-1. core/src/main/java/no/ntnu/ping404/network/PuckInterpolator.java
-2. core/src/main/java/no/ntnu/ping404/screens/GameScreen.java
+1. [core/src/main/java/no/ntnu/ping404/network/PuckInterpolator.java](core/src/main/java/no/ntnu/ping404/network/PuckInterpolator.java)
+2. [core/src/main/java/no/ntnu/ping404/screens/GameScreen.java](core/src/main/java/no/ntnu/ping404/screens/GameScreen.java)
 
 ### 1.9 Runtime metrics for observability and control loops
+
+Rationale: Runtime metrics turn performance behavior into measurable signals for tuning and protection.
 
 1. Client computes local RTT, snapshot rate, and snapshot jitter.
 2. Server computes tick rate, jitter, drop rates, queue depth, and bandwidth.
@@ -102,12 +120,14 @@ Primary references:
 4. Metrics also feed backpressure logic on the server.
 
 Primary references:
-1. core/src/main/java/no/ntnu/ping404/network/GameScreenState.java
-2. server/src/main/java/no/ntnu/ping404/server/game/MetricsBroadcaster.java
-3. docs/metrics-overview.md
-4. README.md
+1. [core/src/main/java/no/ntnu/ping404/network/GameScreenState.java](core/src/main/java/no/ntnu/ping404/network/GameScreenState.java)
+2. [server/src/main/java/no/ntnu/ping404/server/game/MetricsBroadcaster.java](server/src/main/java/no/ntnu/ping404/server/game/MetricsBroadcaster.java)
+3. [docs/metrics-overview.md](docs/metrics-overview.md)
+4. [README.md](README.md)
 
 ### 1.10 Physics stability and determinism
+
+Rationale: Deterministic and bounded collision steps improve fairness, repeatability, and runtime stability.
 
 1. Collision resolution uses substeps computed from puck travel distance.
 2. Substeps are capped to prevent runaway CPU cost.
@@ -116,9 +136,11 @@ Primary references:
 5. This improves stability under variable speed and variable frame timing.
 
 Primary reference:
-1. core/src/main/java/no/ntnu/ping404/utils/CollisionDetector.java
+1. [core/src/main/java/no/ntnu/ping404/utils/CollisionDetector.java](core/src/main/java/no/ntnu/ping404/utils/CollisionDetector.java)
 
 ### 1.11 Stall detection and controlled reset logic
+
+Rationale: Stall recovery prevents dead gameplay states and keeps matches progressing.
 
 1. A detector tracks how long the puck remains on one half.
 2. If it exceeds timeout, server resets puck and broadcasts reset state.
@@ -126,11 +148,13 @@ Primary reference:
 4. This prevents deadlock gameplay states and keeps matches flowing.
 
 Primary references:
-1. core/src/main/java/no/ntnu/ping404/model/StuckPuckDetector.java
-2. core/src/main/java/no/ntnu/ping404/model/GameEngine.java
-3. server/src/main/java/no/ntnu/ping404/server/game/GameLoop.java
+1. [core/src/main/java/no/ntnu/ping404/model/StuckPuckDetector.java](core/src/main/java/no/ntnu/ping404/model/StuckPuckDetector.java)
+2. [core/src/main/java/no/ntnu/ping404/model/GameEngine.java](core/src/main/java/no/ntnu/ping404/model/GameEngine.java)
+3. [server/src/main/java/no/ntnu/ping404/server/game/GameLoop.java](server/src/main/java/no/ntnu/ping404/server/game/GameLoop.java)
 
 ### 1.12 Concurrency primitives and data structures
+
+Rationale: Choosing thread safe structures by access pattern reduces contention and race risk.
 
 1. ConcurrentHashMap is used heavily for shared server state.
 2. CopyOnWriteArrayList is used for listener lists where iteration safety is critical.
@@ -139,63 +163,75 @@ Primary references:
 5. This minimizes lock contention while preserving thread safety.
 
 Primary references:
-1. server/src/main/java/no/ntnu/ping404/server/GameServer.java
-2. server/src/main/java/no/ntnu/ping404/server/GameRoom.java
-3. server/src/main/java/no/ntnu/ping404/server/metrics/RoomMetrics.java
-4. server/src/main/java/no/ntnu/ping404/server/SessionStore.java
+1. [server/src/main/java/no/ntnu/ping404/server/GameServer.java](server/src/main/java/no/ntnu/ping404/server/GameServer.java)
+2. [server/src/main/java/no/ntnu/ping404/server/GameRoom.java](server/src/main/java/no/ntnu/ping404/server/GameRoom.java)
+3. [server/src/main/java/no/ntnu/ping404/server/metrics/RoomMetrics.java](server/src/main/java/no/ntnu/ping404/server/metrics/RoomMetrics.java)
+4. [server/src/main/java/no/ntnu/ping404/server/SessionStore.java](server/src/main/java/no/ntnu/ping404/server/SessionStore.java)
 
 ### 1.13 Render thread safety for UI state mutation
+
+Rationale: Enforcing render thread ownership prevents UI races and inconsistent client state.
 
 1. Packet handlers post state updates to the LibGDX render thread.
 2. This avoids UI side race conditions between network and render threads.
 
 Primary references:
-1. core/src/main/java/no/ntnu/ping404/network/ClientPacketDispatcher.java
-2. core/src/main/java/no/ntnu/ping404/screens/BaseScreen.java
+1. [core/src/main/java/no/ntnu/ping404/network/ClientPacketDispatcher.java](core/src/main/java/no/ntnu/ping404/network/ClientPacketDispatcher.java)
+2. [core/src/main/java/no/ntnu/ping404/screens/BaseScreen.java](core/src/main/java/no/ntnu/ping404/screens/BaseScreen.java)
 
 ### 1.14 Resource lifetime management
+
+Rationale: Explicit create and dispose discipline prevents leaks and long session degradation.
 
 1. Rendering and audio resources are created in lifecycle entry points.
 2. Textures, fonts, batch, shape renderer, sounds, and music are disposed explicitly.
 3. This avoids leaks and long session performance degradation.
 
 Primary references:
-1. core/src/main/java/no/ntnu/ping404/screens/BaseScreen.java
-2. core/src/main/java/no/ntnu/ping404/screens/HomeScreen.java
-3. core/src/main/java/no/ntnu/ping404/audio/AudioManager.java
+1. [core/src/main/java/no/ntnu/ping404/screens/BaseScreen.java](core/src/main/java/no/ntnu/ping404/screens/BaseScreen.java)
+2. [core/src/main/java/no/ntnu/ping404/screens/HomeScreen.java](core/src/main/java/no/ntnu/ping404/screens/HomeScreen.java)
+3. [core/src/main/java/no/ntnu/ping404/audio/AudioManager.java](core/src/main/java/no/ntnu/ping404/audio/AudioManager.java)
 
 ### 1.15 Allocation awareness on hot paths
+
+Rationale: Lower allocation pressure reduces garbage collection spikes during gameplay.
 
 1. Reusable touch vectors and layouts are used in rendering and input code.
 2. Some allocations remain, for example Vector2 copies in snapshot creation and getters, but heavy per frame churn is reduced in critical paths.
 
 Primary references:
-1. core/src/main/java/no/ntnu/ping404/screens/GameInputHandler.java
-2. core/src/main/java/no/ntnu/ping404/screens/BaseScreen.java
-3. core/src/main/java/no/ntnu/ping404/screens/AbstractGameRenderer.java
+1. [core/src/main/java/no/ntnu/ping404/screens/GameInputHandler.java](core/src/main/java/no/ntnu/ping404/screens/GameInputHandler.java)
+2. [core/src/main/java/no/ntnu/ping404/screens/BaseScreen.java](core/src/main/java/no/ntnu/ping404/screens/BaseScreen.java)
+3. [core/src/main/java/no/ntnu/ping404/screens/AbstractGameRenderer.java](core/src/main/java/no/ntnu/ping404/screens/AbstractGameRenderer.java)
 
 ## 2. Complete Summary of LibGDX Usage
 
 ### 2.1 App lifecycle and screen model
+
+Rationale: A clear screen lifecycle keeps navigation, state ownership, and pause and resume handling consistent.
 
 1. The game uses com.badlogic.gdx.Game as the app root.
 2. Screens are used for menu, host, join, game, game over, and settings flows.
 3. App pause and resume events are forwarded to lifecycle aware screens.
 
 Primary reference:
-1. core/src/main/java/no/ntnu/ping404/screens/Ping404Game.java
+1. [core/src/main/java/no/ntnu/ping404/screens/Ping404Game.java](core/src/main/java/no/ntnu/ping404/screens/Ping404Game.java)
 
 ### 2.2 Platform backends
+
+Rationale: Dedicated launchers use the best backend setup per platform while sharing core logic.
 
 1. Desktop uses LWJGL3 backend through Lwjgl3Application.
 2. Android uses AndroidApplication backend.
 3. Android enables wakelock to avoid unintended sleep during gameplay.
 
 Primary references:
-1. desktop/src/main/java/no/ntnu/ping404/desktop/DesktopLauncher.java
-2. android/src/main/java/no/ntnu/ping404/android/AndroidLauncher.java
+1. [desktop/src/main/java/no/ntnu/ping404/desktop/DesktopLauncher.java](desktop/src/main/java/no/ntnu/ping404/desktop/DesktopLauncher.java)
+2. [android/src/main/java/no/ntnu/ping404/android/AndroidLauncher.java](android/src/main/java/no/ntnu/ping404/android/AndroidLauncher.java)
 
 ### 2.3 Rendering pipeline
+
+Rationale: Direct control over render primitives keeps the frame pipeline simple and predictable.
 
 1. SpriteBatch is used for text and textured drawing.
 2. ShapeRenderer is used for geometric game elements and custom UI.
@@ -203,11 +239,13 @@ Primary references:
 4. OrthographicCamera and ExtendViewport provide world projection and adaptive sizing.
 
 Primary references:
-1. core/src/main/java/no/ntnu/ping404/screens/BaseScreen.java
-2. core/src/main/java/no/ntnu/ping404/screens/AbstractGameRenderer.java
-3. core/src/main/java/no/ntnu/ping404/screens/GameScreen.java
+1. [core/src/main/java/no/ntnu/ping404/screens/BaseScreen.java](core/src/main/java/no/ntnu/ping404/screens/BaseScreen.java)
+2. [core/src/main/java/no/ntnu/ping404/screens/AbstractGameRenderer.java](core/src/main/java/no/ntnu/ping404/screens/AbstractGameRenderer.java)
+3. [core/src/main/java/no/ntnu/ping404/screens/GameScreen.java](core/src/main/java/no/ntnu/ping404/screens/GameScreen.java)
 
 ### 2.4 Input model
+
+Rationale: Direct input handling with viewport unprojection gives precise control over gameplay interactions.
 
 1. Gdx.input is used directly for touch and keyboard state.
 2. InputAdapter is used for inline text input and key events.
@@ -215,12 +253,14 @@ Primary references:
 4. Platform specific gestures are used for debug overlay activation.
 
 Primary references:
-1. core/src/main/java/no/ntnu/ping404/screens/BaseScreen.java
-2. core/src/main/java/no/ntnu/ping404/screens/GameInputHandler.java
-3. core/src/main/java/no/ntnu/ping404/screens/GameScreen.java
-4. core/src/main/java/no/ntnu/ping404/screens/AndroidGameRenderer.java
+1. [core/src/main/java/no/ntnu/ping404/screens/BaseScreen.java](core/src/main/java/no/ntnu/ping404/screens/BaseScreen.java)
+2. [core/src/main/java/no/ntnu/ping404/screens/GameInputHandler.java](core/src/main/java/no/ntnu/ping404/screens/GameInputHandler.java)
+3. [core/src/main/java/no/ntnu/ping404/screens/GameScreen.java](core/src/main/java/no/ntnu/ping404/screens/GameScreen.java)
+4. [core/src/main/java/no/ntnu/ping404/screens/AndroidGameRenderer.java](core/src/main/java/no/ntnu/ping404/screens/AndroidGameRenderer.java)
 
 ### 2.5 Math and geometry utilities
+
+Rationale: Using LibGDX math types keeps spatial logic compact, fast, and consistent.
 
 1. Vector2 is used for game state and interpolation vectors.
 2. Vector3 is used for touch unprojection.
@@ -228,41 +268,49 @@ Primary references:
 4. MathUtils is used for clamp and geometry calculations.
 
 Primary references:
-1. core/src/main/java/no/ntnu/ping404/network/PuckInterpolator.java
-2. core/src/main/java/no/ntnu/ping404/screens/GameInputHandler.java
-3. core/src/main/java/no/ntnu/ping404/screens/BaseScreen.java
+1. [core/src/main/java/no/ntnu/ping404/network/PuckInterpolator.java](core/src/main/java/no/ntnu/ping404/network/PuckInterpolator.java)
+2. [core/src/main/java/no/ntnu/ping404/screens/GameInputHandler.java](core/src/main/java/no/ntnu/ping404/screens/GameInputHandler.java)
+3. [core/src/main/java/no/ntnu/ping404/screens/BaseScreen.java](core/src/main/java/no/ntnu/ping404/screens/BaseScreen.java)
 
 ### 2.6 Audio and preferences
+
+Rationale: Centralized audio and persisted settings improve UX consistency across sessions.
 
 1. Sound and Music are used through a singleton audio manager.
 2. Preferences API stores audio flags and user settings.
 3. Preferences also store session reconnect metadata.
 
 Primary references:
-1. core/src/main/java/no/ntnu/ping404/audio/AudioManager.java
-2. core/src/main/java/no/ntnu/ping404/utils/PreferencesManager.java
+1. [core/src/main/java/no/ntnu/ping404/audio/AudioManager.java](core/src/main/java/no/ntnu/ping404/audio/AudioManager.java)
+2. [core/src/main/java/no/ntnu/ping404/utils/PreferencesManager.java](core/src/main/java/no/ntnu/ping404/utils/PreferencesManager.java)
 
 ### 2.7 Render thread handoff
+
+Rationale: Posting state changes to the render thread prevents cross thread UI mutation errors.
 
 1. Gdx.app.postRunnable is used so packet driven UI state changes execute on the render thread.
 
 Primary references:
-1. core/src/main/java/no/ntnu/ping404/network/ClientPacketDispatcher.java
-2. core/src/main/java/no/ntnu/ping404/screens/BaseScreen.java
+1. [core/src/main/java/no/ntnu/ping404/network/ClientPacketDispatcher.java](core/src/main/java/no/ntnu/ping404/network/ClientPacketDispatcher.java)
+2. [core/src/main/java/no/ntnu/ping404/screens/BaseScreen.java](core/src/main/java/no/ntnu/ping404/screens/BaseScreen.java)
 
 ### 2.8 Platform specific renderer selection
+
+Rationale: Shared base rendering with platform specializations avoids duplication and keeps behavior aligned.
 
 1. Runtime platform detection selects desktop or android renderer implementation.
 2. Shared rendering logic stays in an abstract renderer base.
 3. Platform overlays and hints are implemented in specialized classes.
 
 Primary references:
-1. core/src/main/java/no/ntnu/ping404/screens/GameRendererFactory.java
-2. core/src/main/java/no/ntnu/ping404/screens/AbstractGameRenderer.java
-3. core/src/main/java/no/ntnu/ping404/screens/DesktopGameRenderer.java
-4. core/src/main/java/no/ntnu/ping404/screens/AndroidGameRenderer.java
+1. [core/src/main/java/no/ntnu/ping404/screens/GameRendererFactory.java](core/src/main/java/no/ntnu/ping404/screens/GameRendererFactory.java)
+2. [core/src/main/java/no/ntnu/ping404/screens/AbstractGameRenderer.java](core/src/main/java/no/ntnu/ping404/screens/AbstractGameRenderer.java)
+3. [core/src/main/java/no/ntnu/ping404/screens/DesktopGameRenderer.java](core/src/main/java/no/ntnu/ping404/screens/DesktopGameRenderer.java)
+4. [core/src/main/java/no/ntnu/ping404/screens/AndroidGameRenderer.java](core/src/main/java/no/ntnu/ping404/screens/AndroidGameRenderer.java)
 
 ### 2.9 Important LibGDX features not used
+
+Rationale: Explicitly listing excluded frameworks clarifies current architecture boundaries and future extension points.
 
 1. Scene2D is not used.
 2. AssetManager is not used.
