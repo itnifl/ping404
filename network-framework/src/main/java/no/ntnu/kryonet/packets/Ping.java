@@ -9,7 +9,7 @@ public class Ping {
     public Ping() {}
 
     public Ping(int sequence) {
-        this.timestamp = System.currentTimeMillis();
+        this.timestamp = System.nanoTime();
         this.sequence = sequence;
     }
 

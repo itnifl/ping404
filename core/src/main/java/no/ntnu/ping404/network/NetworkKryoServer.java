@@ -5,6 +5,8 @@ import com.esotericsoftware.kryonet.Connection;
 import no.ntnu.ping404.network.packets.PacketRegistry;
 
 import java.io.IOException;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
@@ -16,6 +18,7 @@ public class NetworkKryoServer implements INetworkServer {
 
     private final no.ntnu.kryonet.core.INetworkServer delegate;
     private final CopyOnWriteArrayList<INetworkServer.ServerListener> listeners = new CopyOnWriteArrayList<>();
+    private final Map<Integer, KryoPlayerConnection> connectionWrappers = new ConcurrentHashMap<>();
 
     public NetworkKryoServer() {
         this(PacketRegistry::register);
@@ -30,22 +33,28 @@ public class NetworkKryoServer implements INetworkServer {
         this.delegate.addListener(new no.ntnu.kryonet.core.INetworkServer.ServerListenerAdapter() {
             @Override
             public void onClientConnected(no.ntnu.kryonet.core.INetworkServer.PlayerConnection connection) {
+                KryoPlayerConnection wrappedConnection = adaptConnection(connection);
                 for (INetworkServer.ServerListener listener : listeners) {
-                    listener.onClientConnected(new KryoPlayerConnection(connection));
+                    listener.onClientConnected(wrappedConnection);
                 }
             }
 
             @Override
             public void onClientDisconnected(no.ntnu.kryonet.core.INetworkServer.PlayerConnection connection) {
+                KryoPlayerConnection wrappedConnection = connectionWrappers.remove(connection.getId());
+                if (wrappedConnection == null) {
+                    wrappedConnection = adaptConnection(connection);
+                }
                 for (INetworkServer.ServerListener listener : listeners) {
-                    listener.onClientDisconnected(new KryoPlayerConnection(connection));
+                    listener.onClientDisconnected(wrappedConnection);
                 }
             }
 
             @Override
             public void onReceived(no.ntnu.kryonet.core.INetworkServer.PlayerConnection connection, Object packet) {
+                KryoPlayerConnection wrappedConnection = adaptConnection(connection);
                 for (INetworkServer.ServerListener listener : listeners) {
-                    listener.onReceived(new KryoPlayerConnection(connection), PacketTranslator.toLegacy(packet));
+                    listener.onReceived(wrappedConnection, PacketTranslator.toLegacy(packet));
                 }
             }
         });
@@ -64,47 +73,48 @@ public class NetworkKryoServer implements INetworkServer {
     @Override
     public void stop() {
         delegate.stop();
+        connectionWrappers.clear();
     }
 
     @Override
     public void sendToTCP(int connectionId, Object packet) {
-        delegate.sendToTCP(connectionId, packet);
+        delegate.sendToTCP(connectionId, PacketTranslator.toFramework(packet));
     }
 
     @Override
     public void sendToUDP(int connectionId, Object packet) {
-        delegate.sendToUDP(connectionId, packet);
+        delegate.sendToUDP(connectionId, PacketTranslator.toFramework(packet));
     }
 
     @Override
     public void sendToAllTCP(Object packet) {
-        delegate.sendToAllTCP(packet);
+        delegate.sendToAllTCP(PacketTranslator.toFramework(packet));
     }
 
     @Override
     public void sendToAllUDP(Object packet) {
-        delegate.sendToAllUDP(packet);
+        delegate.sendToAllUDP(PacketTranslator.toFramework(packet));
     }
 
     @Override
     public void sendToAllExceptTCP(int excludeConnectionId, Object packet) {
-        delegate.sendToAllExceptTCP(excludeConnectionId, packet);
+        delegate.sendToAllExceptTCP(excludeConnectionId, PacketTranslator.toFramework(packet));
     }
 
     @Override
     public void sendToAllExceptUDP(int excludeConnectionId, Object packet) {
-        delegate.sendToAllExceptUDP(excludeConnectionId, packet);
+        delegate.sendToAllExceptUDP(excludeConnectionId, PacketTranslator.toFramework(packet));
     }
 
     @Override
     public void forEachConnection(BiConsumer<Integer, INetworkServer.PlayerConnection> action) {
-        delegate.forEachConnection((id, connection) -> action.accept(id, new KryoPlayerConnection(connection)));
+        delegate.forEachConnection((id, connection) -> action.accept(id, adaptConnection(connection)));
     }
 
     @Override
     public INetworkServer.PlayerConnection getConnection(int connectionId) {
         no.ntnu.kryonet.core.INetworkServer.PlayerConnection connection = delegate.getConnection(connectionId);
-        return connection == null ? null : new KryoPlayerConnection(connection);
+        return connection == null ? null : adaptConnection(connection);
     }
 
     @Override
@@ -129,6 +139,10 @@ public class NetworkKryoServer implements INetworkServer {
 
     public no.ntnu.kryonet.core.INetworkServer getFrameworkServer() {
         return delegate;
+    }
+
+    private KryoPlayerConnection adaptConnection(no.ntnu.kryonet.core.INetworkServer.PlayerConnection connection) {
+        return connectionWrappers.computeIfAbsent(connection.getId(), id -> new KryoPlayerConnection(connection));
     }
 
     public static class KryoPlayerConnection implements INetworkServer.PlayerConnection {

@@ -65,7 +65,9 @@ final class PacketTranslator {
             copyFields(value, target, sourcePrefix, targetPrefix, seen);
             return target;
         } catch (Exception e) {
-            return value;
+            throw new IllegalStateException("Failed to translate packet class from "
+                    + sourceName + " to " + targetName
+                    + " (sourcePrefix=" + sourcePrefix + ", targetPrefix=" + targetPrefix + ")", e);
         }
     }
 
@@ -82,7 +84,8 @@ final class PacketTranslator {
             Class<?> targetClass = Class.forName(targetName);
             return Enum.valueOf((Class<? extends Enum>) targetClass, value.name());
         } catch (Exception e) {
-            return value;
+            throw new IllegalStateException("Failed to translate enum "
+                    + value.getClass().getName() + " to " + targetName, e);
         }
     }
 
@@ -162,11 +165,6 @@ final class PacketTranslator {
                 continue;
             }
             targetField.setAccessible(true);
-            if (fieldValue instanceof Collection<?> collection && Collection.class.isAssignableFrom(targetField.getType())) {
-                translatedValue = translateCollection(collection, sourcePrefix, targetPrefix, seen);
-            } else if (fieldValue instanceof Map<?, ?> map && Map.class.isAssignableFrom(targetField.getType())) {
-                translatedValue = translateMap(map, sourcePrefix, targetPrefix, seen);
-            }
             targetField.set(target, translatedValue);
         }
     }

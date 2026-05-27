@@ -33,6 +33,9 @@ public final class NetworkClientBuilder {
     }
 
     public NetworkClientBuilder withThreadDispatcher(ThreadDispatcher dispatcher) {
+        if (dispatcher == null) {
+            throw new IllegalArgumentException("dispatcher must not be null");
+        }
         threadDispatcher = dispatcher;
         return this;
     }

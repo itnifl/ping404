@@ -14,8 +14,8 @@ public class KryoPlayerConnection implements INetworkServer.PlayerConnection {
     private String playerName;
     private float x, y;
     private long lastPositionUpdateTime;
-    private long lastHeartbeatTime;
-    private boolean stale;
+    private volatile long lastHeartbeatTime;
+    private volatile boolean stale;
     private String testRemoteAddress;
 
     public KryoPlayerConnection(Connection connection) {

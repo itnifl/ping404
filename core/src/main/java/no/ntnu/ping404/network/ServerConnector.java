@@ -36,13 +36,13 @@ public class ServerConnector {
             if (networkServer != null) {
                 networkServer.sendToUDP(connectionId, packet);
             } else {
-                frameworkNetworkServer.sendToUDP(connectionId, packet);
+                frameworkNetworkServer.sendToUDP(connectionId, PacketTranslator.toFramework(packet));
             }
         } else {
             if (networkServer != null) {
                 networkServer.sendToTCP(connectionId, packet);
             } else {
-                frameworkNetworkServer.sendToTCP(connectionId, packet);
+                frameworkNetworkServer.sendToTCP(connectionId, PacketTranslator.toFramework(packet));
             }
         }
     }
@@ -60,13 +60,13 @@ public class ServerConnector {
             if (networkServer != null) {
                 networkServer.sendToAllUDP(packet);
             } else {
-                frameworkNetworkServer.sendToAllUDP(packet);
+                frameworkNetworkServer.sendToAllUDP(PacketTranslator.toFramework(packet));
             }
         } else {
             if (networkServer != null) {
                 networkServer.sendToAllTCP(packet);
             } else {
-                frameworkNetworkServer.sendToAllTCP(packet);
+                frameworkNetworkServer.sendToAllTCP(PacketTranslator.toFramework(packet));
             }
         }
     }
@@ -76,13 +76,13 @@ public class ServerConnector {
             if (networkServer != null) {
                 networkServer.sendToAllExceptUDP(excludeId, packet);
             } else {
-                frameworkNetworkServer.sendToAllExceptUDP(excludeId, packet);
+                frameworkNetworkServer.sendToAllExceptUDP(excludeId, PacketTranslator.toFramework(packet));
             }
         } else {
             if (networkServer != null) {
                 networkServer.sendToAllExceptTCP(excludeId, packet);
             } else {
-                frameworkNetworkServer.sendToAllExceptTCP(excludeId, packet);
+                frameworkNetworkServer.sendToAllExceptTCP(excludeId, PacketTranslator.toFramework(packet));
             }
         }
     }
@@ -173,12 +173,12 @@ public class ServerConnector {
 
             @Override
             public void sendToTCP(Object packet) {
-                connection.sendToTCP(packet);
+                connection.sendToTCP(PacketTranslator.toFramework(packet));
             }
 
             @Override
             public void sendToUDP(Object packet) {
-                connection.sendToUDP(packet);
+                connection.sendToUDP(PacketTranslator.toFramework(packet));
             }
         };
     }

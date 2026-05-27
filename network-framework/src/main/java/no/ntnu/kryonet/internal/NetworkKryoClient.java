@@ -38,6 +38,7 @@ public class NetworkKryoClient implements INetworkClient {
     private volatile boolean autoPongEnabled = true;
     private volatile long serverLastHeartbeatTime;
     private Thread consumerThread;
+    private Thread staleDetectionThread;
     private String playerName;
 
     private enum EventType { CONNECTED, DISCONNECTED, RECEIVED }
@@ -88,7 +89,10 @@ public class NetworkKryoClient implements INetworkClient {
     }
 
     private void startStaleDetectionThread() {
-        Thread t = new Thread(() -> {
+        if (staleDetectionThread != null && staleDetectionThread.isAlive()) {
+            return;
+        }
+        staleDetectionThread = new Thread(() -> {
             while (running) {
                 try {
                     Thread.sleep(NetworkConfig.HEARTBEAT_INTERVAL_MS);
@@ -103,8 +107,8 @@ public class NetworkKryoClient implements INetworkClient {
                 }
             }
         }, "kf-client-stale-detection");
-        t.setDaemon(true);
-        t.start();
+        staleDetectionThread.setDaemon(true);
+        staleDetectionThread.start();
     }
 
     private void dispatchEvent(ClientEvent event) {
@@ -135,12 +139,26 @@ public class NetworkKryoClient implements INetworkClient {
 
     @Override
     public void connect(String host, int tcpPort, int udpPort) throws IOException {
+        if (running) {
+            throw new IllegalStateException("Client already running");
+        }
         client.start();
         running = true;
         startConsumerThread();
         startStaleDetectionThread();
-        if (udpPort > 0) client.connect(NetworkConfig.CONNECTION_TIMEOUT_MS, host, tcpPort, udpPort);
-        else             client.connect(NetworkConfig.CONNECTION_TIMEOUT_MS, host, tcpPort);
+        try {
+            if (udpPort > 0) {
+                client.connect(NetworkConfig.CONNECTION_TIMEOUT_MS, host, tcpPort, udpPort);
+            } else {
+                client.connect(NetworkConfig.CONNECTION_TIMEOUT_MS, host, tcpPort);
+            }
+        } catch (IOException e) {
+            running = false;
+            connected = false;
+            stopBackgroundThreads();
+            client.stop();
+            throw e;
+        }
     }
 
     @Override
@@ -155,13 +173,11 @@ public class NetworkKryoClient implements INetworkClient {
 
     @Override
     public void disconnect() {
-        running = false;
-        if (consumerThread != null) {
-            consumerThread.interrupt();
-            try { consumerThread.join(1000); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
-        }
         client.close();
+        running = false;
         connected = false;
+        stopStaleDetectionThread();
+        waitForConsumerThreadDrain();
         logger.info("Client disconnected");
     }
 
@@ -183,5 +199,47 @@ public class NetworkKryoClient implements INetworkClient {
     public void dispose() {
         disconnect();
         client.stop();
+    }
+
+    private void stopBackgroundThreads() {
+        stopStaleDetectionThread();
+        if (consumerThread != null) {
+            consumerThread.interrupt();
+            try {
+                consumerThread.join(1000);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+            consumerThread = null;
+        }
+    }
+
+    private void stopStaleDetectionThread() {
+        if (staleDetectionThread != null) {
+            staleDetectionThread.interrupt();
+            try {
+                staleDetectionThread.join(1000);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+            staleDetectionThread = null;
+        }
+    }
+
+    private void waitForConsumerThreadDrain() {
+        if (consumerThread == null) {
+            return;
+        }
+        try {
+            consumerThread.join(1000);
+            if (consumerThread.isAlive()) {
+                consumerThread.interrupt();
+                consumerThread.join(200);
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        } finally {
+            consumerThread = null;
+        }
     }
 }

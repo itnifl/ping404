@@ -1,6 +1,8 @@
 package no.ntnu.ping404.network;
 
 import java.io.IOException;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 import no.ntnu.ping404.network.packets.Ping;
 import no.ntnu.ping404.network.packets.PlayerPosition;
@@ -23,6 +25,8 @@ public class ClientConnector {
 
     private final INetworkClient networkClient;
     private final no.ntnu.kryonet.core.INetworkClient frameworkNetworkClient;
+    private final Map<NetworkListener, no.ntnu.kryonet.observer.NetworkListener> frameworkListenerBridges =
+            new ConcurrentHashMap<>();
 
     /**
      * Creates a ClientConnector wrapping the provided network client.
@@ -164,13 +168,13 @@ public class ClientConnector {
             if (networkClient != null) {
                 networkClient.sendUDP(packet);
             } else {
-                frameworkNetworkClient.sendUDP(packet);
+                frameworkNetworkClient.sendUDP(PacketTranslator.toFramework(packet));
             }
         } else {
             if (networkClient != null) {
                 networkClient.sendTCP(packet);
             } else {
-                frameworkNetworkClient.sendTCP(packet);
+                frameworkNetworkClient.sendTCP(PacketTranslator.toFramework(packet));
             }
         }
     }
@@ -184,7 +188,7 @@ public class ClientConnector {
         if (networkClient != null) {
             networkClient.addListener(listener);
         } else {
-            frameworkNetworkClient.addListener(new no.ntnu.kryonet.observer.NetworkListener.Adapter() {
+            no.ntnu.kryonet.observer.NetworkListener bridge = new no.ntnu.kryonet.observer.NetworkListener.Adapter() {
                 @Override
                 public void onConnected() {
                     listener.onConnected();
@@ -197,9 +201,11 @@ public class ClientConnector {
 
                 @Override
                 public void onReceived(Object packet) {
-                    listener.onReceived(packet);
+                    listener.onReceived(PacketTranslator.toLegacy(packet));
                 }
-            });
+            };
+            frameworkListenerBridges.put(listener, bridge);
+            frameworkNetworkClient.addListener(bridge);
         }
     }
 
@@ -211,6 +217,11 @@ public class ClientConnector {
     public void removeListener(NetworkListener listener) {
         if (networkClient != null) {
             networkClient.removeListener(listener);
+        } else {
+            no.ntnu.kryonet.observer.NetworkListener bridge = frameworkListenerBridges.remove(listener);
+            if (bridge != null) {
+                frameworkNetworkClient.removeListener(bridge);
+            }
         }
     }
 

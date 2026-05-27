@@ -26,6 +26,11 @@ public final class UserPacketRegistry {
     /** Registers multiple packet classes in order. Returns {@code this} for chaining. */
     public UserPacketRegistry registerAll(List<Class<?>> classes) {
         if (classes == null) throw new IllegalArgumentException("classes must not be null");
+        for (int i = 0; i < classes.size(); i++) {
+            if (classes.get(i) == null) {
+                throw new IllegalArgumentException("classes must not contain null elements, found at index " + i);
+            }
+        }
         entries.addAll(classes);
         return this;
     }

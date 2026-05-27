@@ -9,6 +9,7 @@ import no.ntnu.kryonet.packets.Pong;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
+import java.net.DatagramSocket;
 import java.net.ServerSocket;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -23,6 +24,7 @@ class NetworkRoundTripTest {
     @Test
     void pingPongRoundTripWorksWithFrameworkBuilders() throws Exception {
         int tcpPort = findFreeTcpPort();
+        int udpPort = findFreeUdpPort();
 
         INetworkServer server = NetworkFramework.serverBuilder()
                 .withFrameworkPackets()
@@ -48,8 +50,8 @@ class NetworkRoundTripTest {
                 .build();
 
         try {
-            server.start(tcpPort, tcpPort + 1);
-            client.connect("127.0.0.1", tcpPort, tcpPort + 1);
+            server.start(tcpPort, udpPort);
+            client.connect("127.0.0.1", tcpPort, udpPort);
 
             assertTrue(connected.await(LATCH_TIMEOUT_SECONDS, TimeUnit.SECONDS),
                     "Client should connect to framework server");
@@ -72,6 +74,15 @@ class NetworkRoundTripTest {
             return socket.getLocalPort();
         } catch (IOException e) {
             throw new RuntimeException("Unable to allocate free TCP port", e);
+        }
+    }
+
+    private int findFreeUdpPort() {
+        try (DatagramSocket socket = new DatagramSocket(0)) {
+            socket.setReuseAddress(true);
+            return socket.getLocalPort();
+        } catch (IOException e) {
+            throw new RuntimeException("Unable to allocate free UDP port", e);
         }
     }
 }

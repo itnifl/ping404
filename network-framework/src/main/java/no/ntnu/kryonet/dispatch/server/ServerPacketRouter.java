@@ -18,7 +18,12 @@ import java.util.Map;
  * ServerPacketRouter router = new ServerPacketRouter();
  * router.register(LoginRequest.class, (conn, pkt) -> { ... });
  * router.register(ChatMessage.class,  (conn, pkt) -> { ... });
- * networkServer.addListener(router.asServerListener());
+ * networkServer.addListener(new INetworkServer.ServerListenerAdapter() {
+ *     @Override
+ *     public void onReceived(PlayerConnection connection, Object packet) {
+ *         router.dispatch(connection, packet);
+ *     }
+ * });
  * }</pre>
  */
 public class ServerPacketRouter {

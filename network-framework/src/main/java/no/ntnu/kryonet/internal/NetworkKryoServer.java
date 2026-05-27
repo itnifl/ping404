@@ -39,6 +39,7 @@ public class NetworkKryoServer implements INetworkServer {
     private final BlockingQueue<NetworkEvent> eventQueue = new LinkedBlockingQueue<>();
     private volatile boolean running;
     private Thread consumerThread;
+    private Thread pingThread;
 
     private enum EventType { CONNECTED, DISCONNECTED, RECEIVED }
 
@@ -93,7 +94,10 @@ public class NetworkKryoServer implements INetworkServer {
     }
 
     private void startPingThread() {
-        Thread pingThread = new Thread(() -> {
+        if (pingThread != null && pingThread.isAlive()) {
+            return;
+        }
+        pingThread = new Thread(() -> {
             int sequence = 0;
             while (running) {
                 try {
@@ -144,9 +148,21 @@ public class NetworkKryoServer implements INetworkServer {
 
     @Override
     public void start(int tcpPort, int udpPort) throws IOException {
+        if (running) {
+            throw new IllegalStateException("Server already running");
+        }
         server.start();
-        if (udpPort > 0) server.bind(tcpPort, udpPort);
-        else             server.bind(tcpPort);
+        try {
+            if (udpPort > 0) {
+                server.bind(tcpPort, udpPort);
+            } else {
+                server.bind(tcpPort);
+            }
+        } catch (IOException e) {
+            server.stop();
+            running = false;
+            throw e;
+        }
         running = true;
         startConsumerThread();
         startPingThread();
@@ -161,9 +177,15 @@ public class NetworkKryoServer implements INetworkServer {
     @Override
     public void stop() {
         running = false;
+        if (pingThread != null) {
+            pingThread.interrupt();
+            try { pingThread.join(1000); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+            pingThread = null;
+        }
         if (consumerThread != null) {
             consumerThread.interrupt();
             try { consumerThread.join(1000); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+            consumerThread = null;
         }
         server.stop();
         connections.clear();
