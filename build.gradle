@@ -54,3 +54,7 @@ project(':desktop') {
 project(':server') {
     // Dedicated server application
 }
+
+project(':network-framework') {
+    // Reusable KryoNet networking framework
+}

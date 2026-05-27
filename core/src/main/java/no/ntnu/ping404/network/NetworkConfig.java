@@ -40,6 +40,8 @@ public final class NetworkConfig {
     public static void resetHeartbeatTimeouts() {
         HEARTBEAT_INTERVAL_MS = 5000;
         HEARTBEAT_TIMEOUT_MS = 15000;
+        no.ntnu.kryonet.core.NetworkConfig.HEARTBEAT_INTERVAL_MS = HEARTBEAT_INTERVAL_MS;
+        no.ntnu.kryonet.core.NetworkConfig.HEARTBEAT_TIMEOUT_MS = HEARTBEAT_TIMEOUT_MS;
     }
 
     /**
@@ -49,5 +51,7 @@ public final class NetworkConfig {
     public static void setHeartbeatTimeouts(int intervalMs, int timeoutMs) {
         HEARTBEAT_INTERVAL_MS = intervalMs;
         HEARTBEAT_TIMEOUT_MS = timeoutMs;
+        no.ntnu.kryonet.core.NetworkConfig.HEARTBEAT_INTERVAL_MS = intervalMs;
+        no.ntnu.kryonet.core.NetworkConfig.HEARTBEAT_TIMEOUT_MS = timeoutMs;
     }
 }
