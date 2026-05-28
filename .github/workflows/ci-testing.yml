@@ -23,7 +23,7 @@ jobs:
       - name: Make Gradle wrapper executable
         run: chmod +x gradlew
 
-      - name: Run core, server, and framework tests
+      - name: Run core, server, and kryonet-client-server tests
         run: ./gradlew :core:test :server:test :kryonet-client-server:test
 
       - name: Upload server HTML test report
@@ -40,7 +40,7 @@ jobs:
           name: core-test-report
           path: core/build/reports/tests/test/
 
-      - name: Upload framework HTML test report
+      - name: Upload kryonet-client-server HTML test report
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
