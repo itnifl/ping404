@@ -18,6 +18,7 @@ import java.util.Map;
 import java.util.concurrent.*;
 import no.ntnu.ping404.server.handler.PacketHandlerCommand;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -490,10 +491,12 @@ class ConcurrencyAndAvailabilityTest {
         CountDownLatch login1 = new CountDownLatch(1);
         CountDownLatch login2 = new CountDownLatch(1);
 
-        // Capture receive timestamps for the measured packet so each send attempt can
-        // compute latency independently.
-        BlockingQueue<Long> receiveNanosQueue = new LinkedBlockingQueue<>();
+        // Track receive time for the currently expected attempt packet only.
+        long[] receiveNanos = {0};
         long[] sendNanos = {0};
+        AtomicReference<CountDownLatch> expectedAttemptLatch = new AtomicReference<>();
+        AtomicReference<Float> expectedX = new AtomicReference<>(Float.NaN);
+        AtomicReference<Float> expectedY = new AtomicReference<>(Float.NaN);
       
         // CI-aware tuning: slower runners need wider budgets and longer setup delays.
         long latencyBudgetMs     = isCI ? 500  : POSITION_LATENCY_BUDGET_MS;
@@ -523,9 +526,12 @@ class ConcurrencyAndAvailabilityTest {
                     login2.countDown();
                 }
                 if (packet instanceof PlayerPosition pos) {
-                    // Only count the real test position, not warm-up positions.
-                    if (pos.x == TEST_POS_X && pos.y == TEST_POS_Y) {
-                        receiveNanosQueue.offer(System.nanoTime());
+                    CountDownLatch latch = expectedAttemptLatch.get();
+                    if (latch != null
+                            && Float.compare(pos.x, expectedX.get()) == 0
+                            && Float.compare(pos.y, expectedY.get()) == 0) {
+                        receiveNanos[0] = System.nanoTime();
+                        latch.countDown();
                     }
                 }
             }
@@ -576,22 +582,26 @@ class ConcurrencyAndAvailabilityTest {
 
             // Retry loop: UDP packets can be dropped (especially in CI). Re-send until the
             // opponent receives it, and pass when any observed attempt meets the latency budget.
-            // Queue is cleared before each send so stale timestamps from prior attempts do not
-            // skew the current attempt measurement.
+            // Each attempt uses unique packet coordinates so delayed packets from older attempts
+            // cannot be misattributed to the current attempt.
             boolean packetReceived = false;
             boolean latencyWithinBudget = false;
             long bestLatencyMs = Long.MAX_VALUE;
             for (int attempt = 0; attempt < maxSendAttempts && !latencyWithinBudget; attempt++) {
-                receiveNanosQueue.clear();
+                float attemptX = TEST_POS_X + attempt;
+                float attemptY = TEST_POS_Y + attempt;
+                CountDownLatch attemptReceived = new CountDownLatch(1);
+                expectedX.set(attemptX);
+                expectedY.set(attemptY);
+                expectedAttemptLatch.set(attemptReceived);
                 sendNanos[0] = System.nanoTime();
-                client1.sendUDP(new PlayerPosition(0, TEST_POS_X, TEST_POS_Y));
-                Long receiveNanos = receiveNanosQueue.poll(perAttemptTimeoutMs, TimeUnit.MILLISECONDS);
-                if (receiveNanos == null) {
+                client1.sendUDP(new PlayerPosition(0, attemptX, attemptY));
+                if (!attemptReceived.await(perAttemptTimeoutMs, TimeUnit.MILLISECONDS)) {
                     continue;
                 }
 
                 packetReceived = true;
-                long latencyMs = (receiveNanos - sendNanos[0]) / 1_000_000;
+                long latencyMs = (receiveNanos[0] - sendNanos[0]) / 1_000_000;
                 if (latencyMs < 0) {
                     continue;
                 }
@@ -601,6 +611,7 @@ class ConcurrencyAndAvailabilityTest {
                     latencyWithinBudget = true;
                 }
             }
+            expectedAttemptLatch.set(null);
 
             assertTrue(packetReceived,
                 "Opponent should receive the position update within " + maxSendAttempts + " attempt(s)");

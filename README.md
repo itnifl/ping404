@@ -16,7 +16,7 @@ Ping404 is a multi-module Gradle project with these modules:
   - **VS Code**: [Mermaid Preview](https://marketplace.visualstudio.com/items?itemName=vstirbu.vscode-mermaid-preview) or the [official Mermaid extension](https://marketplace.visualstudio.com/items?itemName=mermaidchart.vscode-mermaid-chart)
   - **Android Studio**: Does not have built-in Mermaid support; diagrams are primarily for documentation and can be viewed in VS Code or a browser-based markdown viewer
 
-## Prerequisite Check Before Run Or Test
+## Prerequisite Checks Before Running Or Testing
 
 Run this first on any OS:
 
