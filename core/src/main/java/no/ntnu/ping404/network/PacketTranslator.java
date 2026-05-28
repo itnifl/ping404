@@ -46,13 +46,6 @@ final class PacketTranslator {
 
         Class<?> sourceClass = value.getClass();
         String sourceName = sourceClass.getName();
-        if (!sourceName.startsWith(sourcePrefix)) {
-            return value;
-        }
-
-        if (sourceClass.isEnum()) {
-            return translateEnum((Enum<?>) value, targetPrefix + sourceName.substring(sourcePrefix.length()));
-        }
         if (sourceClass.isArray()) {
             return translateArray(value, sourcePrefix, targetPrefix, seen);
         }
@@ -61,6 +54,14 @@ final class PacketTranslator {
         }
         if (value instanceof Map<?, ?> map) {
             return translateMap(map, sourcePrefix, targetPrefix, seen);
+        }
+
+        if (!sourceName.startsWith(sourcePrefix)) {
+            return value;
+        }
+
+        if (sourceClass.isEnum()) {
+            return translateEnum((Enum<?>) value, targetPrefix + sourceName.substring(sourcePrefix.length()));
         }
 
         String targetName = targetPrefix + sourceName.substring(sourcePrefix.length());

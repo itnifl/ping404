@@ -8,7 +8,7 @@ public class Pong {
     public long originalTimestamp;
     public long serverTimestamp;
     public int sequence;
-    private transient volatile long cachedRttMs = -1L;
+    private transient volatile long receivedAtNanos = -1L;
 
     public Pong() {}
 
@@ -18,18 +18,21 @@ public class Pong {
         this.sequence = ping.sequence;
     }
 
-    public long getRoundTripTime() {
-        long local = cachedRttMs;
-        if (local >= 0L) {
-            return local;
+    public void markReceivedNow() {
+        if (receivedAtNanos >= 0L) {
+            return;
         }
         synchronized (this) {
-            if (cachedRttMs < 0L) {
-                long elapsedNanos = System.nanoTime() - originalTimestamp;
-                cachedRttMs = TimeUnit.NANOSECONDS.toMillis(Math.max(0L, elapsedNanos));
+            if (receivedAtNanos < 0L) {
+                receivedAtNanos = System.nanoTime();
             }
-            return cachedRttMs;
         }
+    }
+
+    public long getRoundTripTime() {
+        long baseline = receivedAtNanos >= 0L ? receivedAtNanos : System.nanoTime();
+        long elapsedNanos = baseline - originalTimestamp;
+        return TimeUnit.NANOSECONDS.toMillis(Math.max(0L, elapsedNanos));
     }
 
     @Override

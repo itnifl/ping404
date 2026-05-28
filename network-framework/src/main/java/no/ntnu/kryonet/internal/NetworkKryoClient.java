@@ -122,6 +122,8 @@ public class NetworkKryoClient implements INetworkClient {
                         if (event.packet() instanceof Ping ping) {
                             serverLastHeartbeatTime = System.currentTimeMillis();
                             if (autoPongEnabled) sendUDP(new Pong(ping));
+                        } else if (event.packet() instanceof Pong pong) {
+                            pong.markReceivedNow();
                         }
                         listener.onReceived(event.packet());
                     }

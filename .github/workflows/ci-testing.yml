@@ -23,8 +23,8 @@ jobs:
       - name: Make Gradle wrapper executable
         run: chmod +x gradlew
 
-      - name: Run server and framework tests
-        run: ./gradlew :server:test :network-framework:test
+      - name: Run core, server, and framework tests
+        run: ./gradlew :core:test :server:test :network-framework:test
 
       - name: Upload server HTML test report
         if: always()
@@ -32,6 +32,13 @@ jobs:
         with:
           name: server-test-report
           path: server/build/reports/tests/test/
+
+      - name: Upload core HTML test report
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: core-test-report
+          path: core/build/reports/tests/test/
 
       - name: Upload framework HTML test report
         if: always()

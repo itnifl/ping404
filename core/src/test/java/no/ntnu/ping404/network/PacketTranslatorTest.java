@@ -4,11 +4,14 @@ import no.ntnu.ping404.network.packets.PauseRequest;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class PacketTranslatorTest {
 
@@ -84,5 +87,35 @@ class PacketTranslatorTest {
         Object translated = PacketTranslator.toFramework(pauseRequest);
 
         assertSame(pauseRequest, translated);
+    }
+
+    @Test
+    @DisplayName("Legacy packet inside java.util.List is translated")
+    void toFramework_translatesPacketInsideCollection() {
+        no.ntnu.ping404.network.packets.Ping legacy = new no.ntnu.ping404.network.packets.Ping();
+        legacy.timestamp = 55L;
+        legacy.sequence = 2;
+        List<Object> payload = new ArrayList<>();
+        payload.add(legacy);
+
+        Object translated = PacketTranslator.toFramework(payload);
+
+        List<?> translatedList = assertInstanceOf(List.class, translated);
+        assertTrue(translatedList.get(0) instanceof no.ntnu.kryonet.packets.Ping);
+    }
+
+    @Test
+    @DisplayName("Legacy packet inside Object array is translated")
+    void toFramework_translatesPacketInsideArray() {
+        no.ntnu.ping404.network.packets.Pong legacy = new no.ntnu.ping404.network.packets.Pong();
+        legacy.originalTimestamp = 11L;
+        legacy.serverTimestamp = 22L;
+        legacy.sequence = 1;
+        Object[] payload = new Object[] { legacy };
+
+        Object translated = PacketTranslator.toFramework(payload);
+
+        Object[] translatedArray = assertInstanceOf(Object[].class, translated);
+        assertTrue(translatedArray[0] instanceof no.ntnu.kryonet.packets.Pong);
     }
 }
