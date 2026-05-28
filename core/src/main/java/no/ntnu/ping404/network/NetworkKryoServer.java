@@ -16,7 +16,7 @@ import java.util.function.Consumer;
  */
 public class NetworkKryoServer implements INetworkServer {
 
-    private final no.ntnu.kryonet.core.INetworkServer delegate;
+    private final no.creekcode.kryonet.core.INetworkServer delegate;
     private final CopyOnWriteArrayList<INetworkServer.ServerListener> listeners = new CopyOnWriteArrayList<>();
     private final Map<Integer, KryoPlayerConnection> connectionWrappers = new ConcurrentHashMap<>();
 
@@ -25,14 +25,14 @@ public class NetworkKryoServer implements INetworkServer {
     }
 
     public NetworkKryoServer(Consumer<Kryo> registrationCallback) {
-        this.delegate = new no.ntnu.kryonet.internal.NetworkKryoServer(kryo -> {
+        this.delegate = new no.creekcode.kryonet.internal.NetworkKryoServer(kryo -> {
             if (registrationCallback != null) {
                 registrationCallback.accept(kryo);
             }
         });
-        this.delegate.addListener(new no.ntnu.kryonet.core.INetworkServer.ServerListenerAdapter() {
+        this.delegate.addListener(new no.creekcode.kryonet.core.INetworkServer.ServerListenerAdapter() {
             @Override
-            public void onClientConnected(no.ntnu.kryonet.core.INetworkServer.PlayerConnection connection) {
+            public void onClientConnected(no.creekcode.kryonet.core.INetworkServer.PlayerConnection connection) {
                 KryoPlayerConnection wrappedConnection = adaptConnection(connection);
                 for (INetworkServer.ServerListener listener : listeners) {
                     listener.onClientConnected(wrappedConnection);
@@ -40,7 +40,7 @@ public class NetworkKryoServer implements INetworkServer {
             }
 
             @Override
-            public void onClientDisconnected(no.ntnu.kryonet.core.INetworkServer.PlayerConnection connection) {
+            public void onClientDisconnected(no.creekcode.kryonet.core.INetworkServer.PlayerConnection connection) {
                 KryoPlayerConnection wrappedConnection = connectionWrappers.remove(connection.getId());
                 if (wrappedConnection == null) {
                     wrappedConnection = adaptConnection(connection);
@@ -51,7 +51,7 @@ public class NetworkKryoServer implements INetworkServer {
             }
 
             @Override
-            public void onReceived(no.ntnu.kryonet.core.INetworkServer.PlayerConnection connection, Object packet) {
+            public void onReceived(no.creekcode.kryonet.core.INetworkServer.PlayerConnection connection, Object packet) {
                 KryoPlayerConnection wrappedConnection = adaptConnection(connection);
                 for (INetworkServer.ServerListener listener : listeners) {
                     listener.onReceived(wrappedConnection, PacketTranslator.toLegacy(packet));
@@ -113,7 +113,7 @@ public class NetworkKryoServer implements INetworkServer {
 
     @Override
     public INetworkServer.PlayerConnection getConnection(int connectionId) {
-        no.ntnu.kryonet.core.INetworkServer.PlayerConnection connection = delegate.getConnection(connectionId);
+        no.creekcode.kryonet.core.INetworkServer.PlayerConnection connection = delegate.getConnection(connectionId);
         return connection == null ? null : adaptConnection(connection);
     }
 
@@ -137,16 +137,16 @@ public class NetworkKryoServer implements INetworkServer {
         return delegate.isRunning();
     }
 
-    public no.ntnu.kryonet.core.INetworkServer getFrameworkServer() {
+    public no.creekcode.kryonet.core.INetworkServer getFrameworkServer() {
         return delegate;
     }
 
-    private KryoPlayerConnection adaptConnection(no.ntnu.kryonet.core.INetworkServer.PlayerConnection connection) {
+    private KryoPlayerConnection adaptConnection(no.creekcode.kryonet.core.INetworkServer.PlayerConnection connection) {
         return connectionWrappers.computeIfAbsent(connection.getId(), id -> new KryoPlayerConnection(connection));
     }
 
     public static class KryoPlayerConnection implements INetworkServer.PlayerConnection {
-        private final no.ntnu.kryonet.core.INetworkServer.PlayerConnection frameworkConnection;
+        private final no.creekcode.kryonet.core.INetworkServer.PlayerConnection frameworkConnection;
         private final Connection connection;
         private final int fixedId;
         private String playerName;
@@ -162,7 +162,7 @@ public class NetworkKryoServer implements INetworkServer {
             this.fixedId = -1;
         }
 
-        public KryoPlayerConnection(no.ntnu.kryonet.core.INetworkServer.PlayerConnection frameworkConnection) {
+        public KryoPlayerConnection(no.creekcode.kryonet.core.INetworkServer.PlayerConnection frameworkConnection) {
             this.connection = null;
             this.frameworkConnection = frameworkConnection;
             this.fixedId = -1;
@@ -191,14 +191,14 @@ public class NetworkKryoServer implements INetworkServer {
             if (connection != null) {
                 return connection;
             }
-            if (frameworkConnection instanceof no.ntnu.kryonet.internal.KryoPlayerConnection kryoConnection) {
+            if (frameworkConnection instanceof no.creekcode.kryonet.internal.KryoPlayerConnection kryoConnection) {
                 return kryoConnection.getKryoConnection();
             }
             return null;
         }
 
         public void closeConnection() {
-            if (frameworkConnection instanceof no.ntnu.kryonet.internal.KryoPlayerConnection kryoConnection) {
+            if (frameworkConnection instanceof no.creekcode.kryonet.internal.KryoPlayerConnection kryoConnection) {
                 kryoConnection.closeConnection();
             } else if (connection != null) {
                 connection.close();

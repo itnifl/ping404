@@ -19,14 +19,14 @@ import java.util.function.BiConsumer;
 public class ServerConnector {
 
     private final INetworkServer networkServer;
-    private final no.ntnu.kryonet.core.INetworkServer frameworkNetworkServer;
+    private final no.creekcode.kryonet.core.INetworkServer frameworkNetworkServer;
 
     public ServerConnector(INetworkServer networkServer) {
         this.networkServer = networkServer;
         this.frameworkNetworkServer = null;
     }
 
-    public ServerConnector(no.ntnu.kryonet.core.INetworkServer frameworkNetworkServer) {
+    public ServerConnector(no.creekcode.kryonet.core.INetworkServer frameworkNetworkServer) {
         this.networkServer = null;
         this.frameworkNetworkServer = frameworkNetworkServer;
     }
@@ -99,7 +99,7 @@ public class ServerConnector {
         }
     }
 
-    private static PlayerConnection adaptConnection(no.ntnu.kryonet.core.INetworkServer.PlayerConnection connection) {
+    private static PlayerConnection adaptConnection(no.creekcode.kryonet.core.INetworkServer.PlayerConnection connection) {
         return new PlayerConnection() {
             @Override
             public int getId() {

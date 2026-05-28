@@ -9,7 +9,7 @@ java.targetCompatibility = 17
 
 dependencies {
     implementation project(':core')
-    implementation project(':network-framework')
+    implementation project(':kryonet-client-server')
     implementation 'org.slf4j:slf4j-simple:2.0.9'
     testImplementation 'org.junit.jupiter:junit-jupiter:5.10.0'
     testImplementation 'ch.qos.logback:logback-classic:1.4.14'

@@ -24,8 +24,8 @@ import no.ntnu.ping404.network.packets.Pong;
 public class ClientConnector {
 
     private final INetworkClient networkClient;
-    private final no.ntnu.kryonet.core.INetworkClient frameworkNetworkClient;
-    private final Map<NetworkListener, no.ntnu.kryonet.observer.NetworkListener> frameworkListenerBridges =
+    private final no.creekcode.kryonet.core.INetworkClient frameworkNetworkClient;
+    private final Map<NetworkListener, no.creekcode.kryonet.observer.NetworkListener> frameworkListenerBridges =
             new ConcurrentHashMap<>();
 
     /**
@@ -38,7 +38,7 @@ public class ClientConnector {
         this.frameworkNetworkClient = null;
     }
 
-    public ClientConnector(no.ntnu.kryonet.core.INetworkClient frameworkNetworkClient) {
+    public ClientConnector(no.creekcode.kryonet.core.INetworkClient frameworkNetworkClient) {
         this.networkClient = null;
         this.frameworkNetworkClient = frameworkNetworkClient;
     }
@@ -188,7 +188,7 @@ public class ClientConnector {
         if (networkClient != null) {
             networkClient.addListener(listener);
         } else {
-            no.ntnu.kryonet.observer.NetworkListener bridge = new no.ntnu.kryonet.observer.NetworkListener.Adapter() {
+            no.creekcode.kryonet.observer.NetworkListener bridge = new no.creekcode.kryonet.observer.NetworkListener.Adapter() {
                 @Override
                 public void onConnected() {
                     listener.onConnected();
@@ -218,7 +218,7 @@ public class ClientConnector {
         if (networkClient != null) {
             networkClient.removeListener(listener);
         } else {
-            no.ntnu.kryonet.observer.NetworkListener bridge = frameworkListenerBridges.remove(listener);
+            no.creekcode.kryonet.observer.NetworkListener bridge = frameworkListenerBridges.remove(listener);
             if (bridge != null) {
                 frameworkNetworkClient.removeListener(bridge);
             }

@@ -5,6 +5,7 @@ Ping404 is a multi-module Gradle project with these modules:
 - `desktop`: desktop client
 - `android`: Android client
 - `server`: dedicated game server
+- `kryonet-client-server`: standalone networking module (namespace `no.creekcode.kryonet`)
 
 ## Prerequisites
 
@@ -157,6 +158,10 @@ gradlew.bat build
 ## Networking
 
 `NetworkServer` and `NetworkClient` (both in `core`) communicate over TCP using [KryoNet](https://github.com/EsotericSoftware/kryonet).
+
+The standalone networking module is `kryonet-client-server`, with public API under `no.creekcode.kryonet`.
+For module usage patterns and command registration API, see:
+- `kryonet-client-server/src/main/java/no/creekcode/kryonet/readme.md`
 
 See also: [Metrics System Overview](docs/metrics-overview.md)
 

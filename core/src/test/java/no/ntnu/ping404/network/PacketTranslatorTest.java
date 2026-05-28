@@ -24,8 +24,8 @@ class PacketTranslatorTest {
 
         Object translated = PacketTranslator.toFramework(legacy);
 
-        no.ntnu.kryonet.packets.Ping framework =
-                assertInstanceOf(no.ntnu.kryonet.packets.Ping.class, translated);
+        no.creekcode.kryonet.packets.Ping framework =
+                assertInstanceOf(no.creekcode.kryonet.packets.Ping.class, translated);
         assertEquals(TimeUnit.MILLISECONDS.toNanos(1234L), framework.timestamp);
         assertEquals(42, framework.sequence);
     }
@@ -33,7 +33,7 @@ class PacketTranslatorTest {
     @Test
     @DisplayName("Framework Ping timestamp converts from ns to ms")
     void toLegacy_pingTimestampConvertedToMillis() {
-        no.ntnu.kryonet.packets.Ping framework = new no.ntnu.kryonet.packets.Ping();
+        no.creekcode.kryonet.packets.Ping framework = new no.creekcode.kryonet.packets.Ping();
         framework.timestamp = TimeUnit.MILLISECONDS.toNanos(9876L);
         framework.sequence = 7;
 
@@ -55,8 +55,8 @@ class PacketTranslatorTest {
 
         Object translated = PacketTranslator.toFramework(legacy);
 
-        no.ntnu.kryonet.packets.Pong framework =
-                assertInstanceOf(no.ntnu.kryonet.packets.Pong.class, translated);
+        no.creekcode.kryonet.packets.Pong framework =
+                assertInstanceOf(no.creekcode.kryonet.packets.Pong.class, translated);
         assertEquals(TimeUnit.MILLISECONDS.toNanos(111L), framework.originalTimestamp);
         assertEquals(TimeUnit.MILLISECONDS.toNanos(222L), framework.serverTimestamp);
         assertEquals(3, framework.sequence);
@@ -65,7 +65,7 @@ class PacketTranslatorTest {
     @Test
     @DisplayName("Framework Pong timestamps convert from ns to ms")
     void toLegacy_pongTimestampsConvertedToMillis() {
-        no.ntnu.kryonet.packets.Pong framework = new no.ntnu.kryonet.packets.Pong();
+        no.creekcode.kryonet.packets.Pong framework = new no.creekcode.kryonet.packets.Pong();
         framework.originalTimestamp = TimeUnit.MILLISECONDS.toNanos(333L);
         framework.serverTimestamp = TimeUnit.MILLISECONDS.toNanos(444L);
         framework.sequence = 9;
@@ -101,7 +101,7 @@ class PacketTranslatorTest {
         Object translated = PacketTranslator.toFramework(payload);
 
         List<?> translatedList = assertInstanceOf(List.class, translated);
-        assertTrue(translatedList.get(0) instanceof no.ntnu.kryonet.packets.Ping);
+        assertTrue(translatedList.get(0) instanceof no.creekcode.kryonet.packets.Ping);
     }
 
     @Test
@@ -116,6 +116,6 @@ class PacketTranslatorTest {
         Object translated = PacketTranslator.toFramework(payload);
 
         Object[] translatedArray = assertInstanceOf(Object[].class, translated);
-        assertTrue(translatedArray[0] instanceof no.ntnu.kryonet.packets.Pong);
+        assertTrue(translatedArray[0] instanceof no.creekcode.kryonet.packets.Pong);
     }
 }
