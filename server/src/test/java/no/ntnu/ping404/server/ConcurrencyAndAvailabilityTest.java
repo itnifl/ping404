@@ -523,11 +523,25 @@ class ConcurrencyAndAvailabilityTest {
             client2.sendTCP(new LoginRequest(PLAYER_2_NAME));
             Thread.sleep(loginDelayMs);
 
-            // Set room to PLAYING so PositionHandlerCommand processes position updates
-            for (GameRoom room : gameServer.getRooms().values()) {
-                room.setPhase(GameState.Phase.PLAYING);
-                gameServer.startGameLoop(room);
+            GameRoom activeRoom = null;
+            long roomReadyDeadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(isCI ? 3000 : 1200);
+            while (System.nanoTime() < roomReadyDeadline) {
+                for (GameRoom room : gameServer.getRooms().values()) {
+                    if (room.getConnections().size() == 2) {
+                        activeRoom = room;
+                        break;
+                    }
+                }
+                if (activeRoom != null) {
+                    break;
+                }
+                Thread.sleep(25);
             }
+            assertNotNull(activeRoom, "Expected a room with both clients before latency measurement");
+
+            // Set room to PLAYING so PositionHandlerCommand processes position updates.
+            activeRoom.setPhase(GameState.Phase.PLAYING);
+            gameServer.startGameLoop(activeRoom);
 
             // Send multiple warmup packets from each client to robustly establish their
             // UDP addresses with the server. KryoNet requires the client to send UDP before

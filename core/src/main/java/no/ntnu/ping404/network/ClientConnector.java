@@ -1,6 +1,8 @@
 package no.ntnu.ping404.network;
 
 import java.io.IOException;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 import no.ntnu.ping404.network.packets.Ping;
 import no.ntnu.ping404.network.packets.PlayerPosition;
@@ -22,6 +24,9 @@ import no.ntnu.ping404.network.packets.Pong;
 public class ClientConnector {
 
     private final INetworkClient networkClient;
+    private final no.ntnu.kryonet.core.INetworkClient frameworkNetworkClient;
+    private final Map<NetworkListener, no.ntnu.kryonet.observer.NetworkListener> frameworkListenerBridges =
+            new ConcurrentHashMap<>();
 
     /**
      * Creates a ClientConnector wrapping the provided network client.
@@ -30,6 +35,12 @@ public class ClientConnector {
      */
     public ClientConnector(INetworkClient networkClient) {
         this.networkClient = networkClient;
+        this.frameworkNetworkClient = null;
+    }
+
+    public ClientConnector(no.ntnu.kryonet.core.INetworkClient frameworkNetworkClient) {
+        this.networkClient = null;
+        this.frameworkNetworkClient = frameworkNetworkClient;
     }
 
     /**
@@ -51,7 +62,11 @@ public class ClientConnector {
      * @throws IOException if the connection fails
      */
     public void connect(String host, int tcpPort, int udpPort) throws IOException {
-        networkClient.connect(host, tcpPort, udpPort);
+        if (networkClient != null) {
+            networkClient.connect(host, tcpPort, udpPort);
+        } else {
+            frameworkNetworkClient.connect(host, tcpPort, udpPort);
+        }
     }
 
     /**
@@ -60,7 +75,11 @@ public class ClientConnector {
      * @throws IOException if the connection fails
      */
     public void connect() throws IOException {
-        networkClient.connect();
+        if (networkClient != null) {
+            networkClient.connect();
+        } else {
+            frameworkNetworkClient.connect();
+        }
     }
 
     /**
@@ -70,14 +89,22 @@ public class ClientConnector {
      * @throws IOException if the connection fails
      */
     public void connect(String host) throws IOException {
-        networkClient.connect(host);
+        if (networkClient != null) {
+            networkClient.connect(host);
+        } else {
+            frameworkNetworkClient.connect(host);
+        }
     }
 
     /**
      * Disconnects from the server.
      */
     public void disconnect() {
-        networkClient.disconnect();
+        if (networkClient != null) {
+            networkClient.disconnect();
+        } else {
+            frameworkNetworkClient.disconnect();
+        }
     }
 
     /**
@@ -86,7 +113,7 @@ public class ClientConnector {
      * @return true if connected
      */
     public boolean isConnected() {
-        return networkClient.isConnected();
+        return networkClient != null ? networkClient.isConnected() : frameworkNetworkClient.isConnected();
     }
 
     /**
@@ -95,7 +122,7 @@ public class ClientConnector {
      * @return the connection ID
      */
     public int getConnectionId() {
-        return networkClient.getConnectionId();
+        return networkClient != null ? networkClient.getConnectionId() : frameworkNetworkClient.getConnectionId();
     }
 
     /**
@@ -104,7 +131,7 @@ public class ClientConnector {
      * @return the player name
      */
     public String getPlayerName() {
-        return networkClient.getPlayerName();
+        return networkClient != null ? networkClient.getPlayerName() : frameworkNetworkClient.getPlayerName();
     }
 
     /**
@@ -113,14 +140,22 @@ public class ClientConnector {
      * @param playerName the player name
      */
     public void setPlayerName(String playerName) {
-        networkClient.setPlayerName(playerName);
+        if (networkClient != null) {
+            networkClient.setPlayerName(playerName);
+        } else {
+            frameworkNetworkClient.setPlayerName(playerName);
+        }
     }
 
     /**
      * Releases resources and closes the connection.
      */
     public void dispose() {
-        networkClient.dispose();
+        if (networkClient != null) {
+            networkClient.dispose();
+        } else {
+            frameworkNetworkClient.dispose();
+        }
     }
 
     /**
@@ -130,9 +165,17 @@ public class ClientConnector {
      */
     public void send(Object packet) {
         if (isUnreliable(packet)) {
-            networkClient.sendUDP(packet);
+            if (networkClient != null) {
+                networkClient.sendUDP(packet);
+            } else {
+                frameworkNetworkClient.sendUDP(PacketTranslator.toFramework(packet));
+            }
         } else {
-            networkClient.sendTCP(packet);
+            if (networkClient != null) {
+                networkClient.sendTCP(packet);
+            } else {
+                frameworkNetworkClient.sendTCP(PacketTranslator.toFramework(packet));
+            }
         }
     }
 
@@ -142,7 +185,28 @@ public class ClientConnector {
      * @param listener the listener to add
      */
     public void addListener(NetworkListener listener) {
-        networkClient.addListener(listener);
+        if (networkClient != null) {
+            networkClient.addListener(listener);
+        } else {
+            no.ntnu.kryonet.observer.NetworkListener bridge = new no.ntnu.kryonet.observer.NetworkListener.Adapter() {
+                @Override
+                public void onConnected() {
+                    listener.onConnected();
+                }
+
+                @Override
+                public void onDisconnected() {
+                    listener.onDisconnected();
+                }
+
+                @Override
+                public void onReceived(Object packet) {
+                    listener.onReceived(PacketTranslator.toLegacy(packet));
+                }
+            };
+            frameworkListenerBridges.put(listener, bridge);
+            frameworkNetworkClient.addListener(bridge);
+        }
     }
 
     /**
@@ -151,7 +215,14 @@ public class ClientConnector {
      * @param listener the listener to remove
      */
     public void removeListener(NetworkListener listener) {
-        networkClient.removeListener(listener);
+        if (networkClient != null) {
+            networkClient.removeListener(listener);
+        } else {
+            no.ntnu.kryonet.observer.NetworkListener bridge = frameworkListenerBridges.remove(listener);
+            if (bridge != null) {
+                frameworkNetworkClient.removeListener(bridge);
+            }
+        }
     }
 
     private static boolean isUnreliable(Object packet) {

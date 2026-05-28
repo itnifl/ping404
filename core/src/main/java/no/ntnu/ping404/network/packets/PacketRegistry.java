@@ -3,16 +3,15 @@ package no.ntnu.ping404.network.packets;
 import com.badlogic.gdx.math.Vector2;
 import com.esotericsoftware.kryo.Kryo;
 import no.ntnu.ping404.model.GameState;
+import no.ntnu.kryonet.registry.FrameworkPacketRegistry;
 
 public final class PacketRegistry {
 
     private PacketRegistry() {}
 
     public static void register(Kryo kryo) {
-        kryo.register(byte[].class);
-        kryo.register(int[].class);
-        kryo.register(float[].class);
-        kryo.register(String[].class);
+        // Keep framework registrations first so Kryo IDs stay stable across apps.
+        FrameworkPacketRegistry.registerAll(kryo);
         kryo.register(LoginRequest.class);
         kryo.register(LoginResponse.class);
         kryo.register(PlayerPosition.class);
@@ -34,9 +33,7 @@ public final class PacketRegistry {
         kryo.register(HostMigration.class);
         kryo.register(GameReset.class);
         kryo.register(LeaveRoom.class);
-        kryo.register(java.util.ArrayList.class);
         kryo.register(GameOver.class);
-        kryo.register(java.util.HashMap.class);
         kryo.register(GoalScored.class);
         kryo.register(ScoreUpdate.class); 
         kryo.register(GameStateSnapshot.class);

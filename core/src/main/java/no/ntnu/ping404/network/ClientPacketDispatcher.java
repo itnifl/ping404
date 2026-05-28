@@ -1,6 +1,7 @@
 package no.ntnu.ping404.network;
 
 import com.badlogic.gdx.Gdx;
+import no.ntnu.kryonet.dispatch.client.ThreadDispatcher;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -23,6 +24,21 @@ import java.util.concurrent.ConcurrentHashMap;
 public class ClientPacketDispatcher {
 
     private final Map<Class<?>, ClientPacketHandler<?>> handlers = new ConcurrentHashMap<>();
+    private final ThreadDispatcher threadDispatcher;
+
+    public ClientPacketDispatcher() {
+        this(task -> {
+            if (Gdx.app != null) {
+                Gdx.app.postRunnable(task);
+            } else {
+                task.run();
+            }
+        });
+    }
+
+    public ClientPacketDispatcher(ThreadDispatcher threadDispatcher) {
+        this.threadDispatcher = threadDispatcher != null ? threadDispatcher : ThreadDispatcher.DIRECT;
+    }
 
     /**
      * Registers a typed packet handler.
@@ -51,13 +67,7 @@ public class ClientPacketDispatcher {
         ClientPacketHandler<Object> handler = (ClientPacketHandler<Object>) handlers.get(packet.getClass());
         if (handler == null) return;
 
-        Runnable update = () -> handler.handle(packet);
-
-        if (Gdx.app != null) {
-            Gdx.app.postRunnable(update);
-        } else {
-            update.run();
-        }
+        threadDispatcher.dispatch(() -> handler.handle(packet));
     }
 
     /**

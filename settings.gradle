@@ -3,4 +3,4 @@ plugins {
 }
 rootProject.name = 'Ping404'
 
-include 'core', 'android', 'desktop', 'server'
+include 'core', 'android', 'desktop', 'server', 'network-framework'

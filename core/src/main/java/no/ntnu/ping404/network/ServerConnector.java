@@ -19,16 +19,31 @@ import java.util.function.BiConsumer;
 public class ServerConnector {
 
     private final INetworkServer networkServer;
+    private final no.ntnu.kryonet.core.INetworkServer frameworkNetworkServer;
 
     public ServerConnector(INetworkServer networkServer) {
         this.networkServer = networkServer;
+        this.frameworkNetworkServer = null;
+    }
+
+    public ServerConnector(no.ntnu.kryonet.core.INetworkServer frameworkNetworkServer) {
+        this.networkServer = null;
+        this.frameworkNetworkServer = frameworkNetworkServer;
     }
 
     public void send(int connectionId, Object packet) {
         if (isUnreliable(packet)) {
-            networkServer.sendToUDP(connectionId, packet);
+            if (networkServer != null) {
+                networkServer.sendToUDP(connectionId, packet);
+            } else {
+                frameworkNetworkServer.sendToUDP(connectionId, PacketTranslator.toFramework(packet));
+            }
         } else {
-            networkServer.sendToTCP(connectionId, packet);
+            if (networkServer != null) {
+                networkServer.sendToTCP(connectionId, packet);
+            } else {
+                frameworkNetworkServer.sendToTCP(connectionId, PacketTranslator.toFramework(packet));
+            }
         }
     }
 
@@ -42,26 +57,130 @@ public class ServerConnector {
 
     public void broadcast(Object packet) {
         if (isUnreliable(packet)) {
-            networkServer.sendToAllUDP(packet);
+            if (networkServer != null) {
+                networkServer.sendToAllUDP(packet);
+            } else {
+                frameworkNetworkServer.sendToAllUDP(PacketTranslator.toFramework(packet));
+            }
         } else {
-            networkServer.sendToAllTCP(packet);
+            if (networkServer != null) {
+                networkServer.sendToAllTCP(packet);
+            } else {
+                frameworkNetworkServer.sendToAllTCP(PacketTranslator.toFramework(packet));
+            }
         }
     }
 
     public void broadcastExcept(int excludeId, Object packet) {
         if (isUnreliable(packet)) {
-            networkServer.sendToAllExceptUDP(excludeId, packet);
+            if (networkServer != null) {
+                networkServer.sendToAllExceptUDP(excludeId, packet);
+            } else {
+                frameworkNetworkServer.sendToAllExceptUDP(excludeId, PacketTranslator.toFramework(packet));
+            }
         } else {
-            networkServer.sendToAllExceptTCP(excludeId, packet);
+            if (networkServer != null) {
+                networkServer.sendToAllExceptTCP(excludeId, packet);
+            } else {
+                frameworkNetworkServer.sendToAllExceptTCP(excludeId, PacketTranslator.toFramework(packet));
+            }
         }
     }
 
     public int getConnectionCount() {
-        return networkServer.getConnectionCount();
+        return networkServer != null ? networkServer.getConnectionCount() : frameworkNetworkServer.getConnectionCount();
     }
 
     public void forEachConnection(BiConsumer<Integer, PlayerConnection> action) {
-        networkServer.forEachConnection(action);
+        if (networkServer != null) {
+            networkServer.forEachConnection(action);
+        } else {
+            frameworkNetworkServer.forEachConnection((id, connection) -> action.accept(id, adaptConnection(connection)));
+        }
+    }
+
+    private static PlayerConnection adaptConnection(no.ntnu.kryonet.core.INetworkServer.PlayerConnection connection) {
+        return new PlayerConnection() {
+            @Override
+            public int getId() {
+                return connection.getId();
+            }
+
+            @Override
+            public String getRemoteAddress() {
+                return connection.getRemoteAddress();
+            }
+
+            @Override
+            public String getPlayerName() {
+                return connection.getPlayerName();
+            }
+
+            @Override
+            public void setPlayerName(String playerName) {
+                connection.setPlayerName(playerName);
+            }
+
+            @Override
+            public float getX() {
+                return connection.getX();
+            }
+
+            @Override
+            public void setX(float x) {
+                connection.setX(x);
+            }
+
+            @Override
+            public float getY() {
+                return connection.getY();
+            }
+
+            @Override
+            public void setY(float y) {
+                connection.setY(y);
+            }
+
+            @Override
+            public void setPosition(float x, float y) {
+                connection.setPosition(x, y);
+            }
+
+            @Override
+            public long getLastPositionUpdateTime() {
+                return connection.getLastPositionUpdateTime();
+            }
+
+            @Override
+            public long getLastHeartbeatTime() {
+                return connection.getLastHeartbeatTime();
+            }
+
+            @Override
+            public void updateLastHeartbeat() {
+                connection.updateLastHeartbeat();
+            }
+
+            @Override
+            public boolean isStale() {
+                return connection.isStale();
+            }
+
+            @Override
+            public void markStale() {
+                connection.markStale();
+            }
+
+            @Override
+            public void sendToTCP(Object packet) {
+                connection.sendToTCP(PacketTranslator.toFramework(packet));
+            }
+
+            @Override
+            public void sendToUDP(Object packet) {
+                connection.sendToUDP(PacketTranslator.toFramework(packet));
+            }
+        };
     }
 
     private static boolean isUnreliable(Object packet) {

@@ -110,6 +110,7 @@ If one client is an Android emulator and the server runs on your PC, use fo inst
 ## References
 - Sound effects are from: https://www.epidemicsound.com/sound-effects/search/
 - Performance tactics and LibGDX usage summary: [PERFORMANCE_LIBGDX_SUMMARY.md](PERFORMANCE_LIBGDX_SUMMARY.md)
+- Project requirements summary: [requirements.md](requirements.md)
 
 ## Testing
 
