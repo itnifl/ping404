@@ -460,6 +460,17 @@ private static boolean isUnreliable(Object packet) {
 From [core/src/main/java/no/ntnu/ping404/network/PuckInterpolator.java](core/src/main/java/no/ntnu/ping404/network/PuckInterpolator.java):
 
 ```java
+// onAuthoritativeUpdate(...): snap reference uses lead-compensated coordinates
+float leadX = authoritativePosition.x + authoritativeVelocity.x * LEAD_COMPENSATION_TIME;
+float leadY = authoritativePosition.y + authoritativeVelocity.y * LEAD_COMPENSATION_TIME;
+float dx = renderPosition.x - leadX;
+float dy = renderPosition.y - leadY;
+float deviation = (float) Math.sqrt(dx * dx + dy * dy);
+if (deviation > SNAP_THRESHOLD) {
+    renderPosition.set(leadX, leadY); // hard snap on large divergence
+}
+
+// update(...): lead-compensated prediction target
 timeSinceUpdate += deltaTime;
 float extrapolationTime = Math.min(timeSinceUpdate, MAX_EXTRAPOLATION_TIME);
 
@@ -473,11 +484,6 @@ float targetY = authoritativePosition.y + authoritativeVelocity.y * leadTime;
 float blendFactor = 1f - (float) Math.exp(-BLEND_RATE * deltaTime);
 renderPosition.x += (targetX - renderPosition.x) * blendFactor;
 renderPosition.y += (targetY - renderPosition.y) * blendFactor;
-
-// Snap when the render position deviates from the lead compensated reference
-if (deviation > SNAP_THRESHOLD) {
-    renderPosition.set(leadX, leadY); // hard snap on large divergence
-}
 ```
 
 ### 5.8 Substepped, bounded collision resolution

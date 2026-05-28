@@ -55,6 +55,32 @@ class PuckInterpolatorTest {
         return lastAuthoritativeX;
     }
 
+    /**
+     * Simulates the production integration path where the interpolator receives
+     * one authoritative update per render frame.
+     */
+    private static float simulatePerFrameAuthoritativeUpdates(PuckInterpolator interpolator,
+                                                              Vector2 startPosition,
+                                                              Vector2 velocity,
+                                                              float seconds) {
+        float elapsed = 0f;
+        float lastAuthoritativeX = startPosition.x;
+
+        while (elapsed < seconds) {
+            Vector2 currentAuthoritative = new Vector2(
+                startPosition.x + velocity.x * elapsed,
+                startPosition.y + velocity.y * elapsed
+            );
+            interpolator.onAuthoritativeUpdate(currentAuthoritative, velocity);
+            interpolator.update(FRAME_DELTA);
+
+            elapsed += FRAME_DELTA;
+            lastAuthoritativeX = currentAuthoritative.x;
+        }
+
+        return lastAuthoritativeX;
+    }
+
     @Test
     @Tag("P2")
     @DisplayName("Render position does not trail authoritative when puck moves fast")
@@ -84,6 +110,24 @@ class PuckInterpolatorTest {
         assertTrue(renderedX <= lastAuthoritativeX + lead + 10f,
             "Render position should not run unbounded ahead of authoritative. "
                 + "render=" + renderedX + " auth=" + lastAuthoritativeX + " maxLead=" + lead);
+    }
+
+    @Test
+    @Tag("P2")
+    @DisplayName("Render position does not trail authoritative with per-frame updates")
+    void renderPositionDoesNotTrailAuthoritativeWithPerFrameUpdates() {
+        PuckInterpolator interpolator = new PuckInterpolator();
+        Vector2 startPosition = new Vector2(0f, 0f);
+        Vector2 velocity = new Vector2(1500f, 0f);
+
+        float totalSeconds = 1f;
+        float lastAuthoritativeX = simulatePerFrameAuthoritativeUpdates(
+            interpolator, startPosition, velocity, totalSeconds);
+        float renderedX = interpolator.getRenderX();
+
+        assertTrue(renderedX >= lastAuthoritativeX - 5f,
+            "Per-frame authoritative updates should not produce trailing. "
+                + "render=" + renderedX + " auth=" + lastAuthoritativeX);
     }
 
     @Test
@@ -119,6 +163,34 @@ class PuckInterpolatorTest {
             "Render X should snap to authoritative on large jump");
         assertEquals(farAway.y, interpolator.getRenderY(), 0.01f,
             "Render Y should snap to authoritative on large jump");
+    }
+
+    @Test
+    @Tag("P2")
+    @DisplayName("Moving bounce correction snaps to lead-compensated target")
+    void movingBounceCorrectionSnapsToLeadCompensatedTarget() {
+        PuckInterpolator interpolator = new PuckInterpolator();
+
+        Vector2 initialPosition = new Vector2(0f, 0f);
+        Vector2 initialVelocity = new Vector2(600f, 0f);
+        interpolator.onAuthoritativeUpdate(initialPosition, initialVelocity);
+
+        // Let render position move into the field before correction arrives.
+        for (int i = 0; i < 10; i++) {
+            interpolator.update(FRAME_DELTA);
+        }
+
+        // Use a sufficiently large correction so deviation exceeds SNAP_THRESHOLD and
+        // the snap path is guaranteed to execute.
+        Vector2 correctedPosition = new Vector2(500f, 0f);
+        Vector2 reversedVelocity = new Vector2(-600f, 0f);
+        interpolator.onAuthoritativeUpdate(correctedPosition, reversedVelocity);
+
+        float expectedLeadX = correctedPosition.x + reversedVelocity.x * (1f / 10f);
+        assertEquals(expectedLeadX, interpolator.getRenderX(), 0.01f,
+            "Render X should snap to lead-compensated X after moving correction");
+        assertEquals(correctedPosition.y, interpolator.getRenderY(), 0.01f,
+            "Render Y should snap consistently with corrected Y");
     }
 
     @Test
