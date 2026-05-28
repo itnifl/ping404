@@ -47,6 +47,9 @@ public final class PacketCommandRegistry {
     }
 
     public boolean hasHandler(Class<?> packetClass) {
+        if (packetClass == null) {
+            throw new IllegalArgumentException("packetClass must not be null");
+        }
         return handlers.containsKey(packetClass);
     }
 

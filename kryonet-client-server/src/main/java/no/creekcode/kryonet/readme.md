@@ -83,7 +83,7 @@ client.connect("localhost", 27960, 27961);
 
 ## 5) Register custom packets and handlers
 
-### Server side (direct registration)
+### Server-side (direct registration)
 
 ```java
 import no.creekcode.kryonet.builder.NetworkFramework;
@@ -100,7 +100,7 @@ INetworkServer server = NetworkFramework.serverBuilder()
         .build();
 ```
 
-### Server side (encapsulated command registry)
+### Server-side (encapsulated command registry)
 
 ```java
 import no.creekcode.kryonet.builder.NetworkFramework;
@@ -121,7 +121,7 @@ INetworkServer server = NetworkFramework.serverBuilder()
         .build();
 ```
 
-### Client side
+### Client-side
 
 ```java
 import no.creekcode.kryonet.builder.NetworkFramework;
