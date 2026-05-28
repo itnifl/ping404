@@ -246,7 +246,7 @@ class ConcurrencyAndAvailabilityTest {
     @Tag("P3")
     void twoConcurrentRoomsUpdateAllClientsIndependently() throws IOException, InterruptedException {
         // QAS-P3: Two rooms must each deliver state updates to their own clients
-        // within 50 ms, without one room delaying the other.
+        // within 50 ms locally (200 ms in CI), without one room delaying the other.
         boolean isCI = System.getenv("CI") != null;
         long roomDeliveryBudgetMs = isCI ? 200 : ROOM_DELIVERY_BUDGET_MS;
         long packetTimeoutSeconds = isCI ? 4 : PACKET_TIMEOUT_SECONDS;
@@ -316,11 +316,11 @@ class ConcurrencyAndAvailabilityTest {
 
             assertTrue(received.await(packetTimeoutSeconds, TimeUnit.SECONDS), "Both clients should receive position updates");
 
-            // Both deliveries must happen within 50 ms of sending.
+            // Both deliveries must happen within the active delivery budget from sending.
             for (int i = 0; i < 4; i++) {
                 if (times[i] > 0) {
                     assertTrue(times[i] - sendTime < roomDeliveryBudgetMs,
-                        "Delivery took " + (times[i] - sendTime) + " ms â€” exceeds " + roomDeliveryBudgetMs + " ms budget");
+                        "Delivery took " + (times[i] - sendTime) + " ms - exceeds " + roomDeliveryBudgetMs + " ms budget");
                 }
             }
         } finally {
