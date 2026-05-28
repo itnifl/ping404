@@ -112,7 +112,7 @@ public final class NetworkServerBuilder {
         if (handlePing) {
             router.register(Ping.class, new PingHandlerCommand(connector));
         }
-        if (frameworkPackets || handlePong) {
+        if (handlePong) {
             router.register(Pong.class, new PongHandlerCommand(rttListener));
         }
         if (handleChat) {

@@ -8,7 +8,7 @@ public class Pong {
     public long originalTimestamp;
     public long serverTimestamp;
     public int sequence;
-    private volatile long cachedRttMs = -1L;
+    private transient volatile long cachedRttMs = -1L;
 
     public Pong() {}
 

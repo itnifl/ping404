@@ -4,8 +4,8 @@ import no.ntnu.kryonet.core.INetworkServer.PlayerConnection;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Routes incoming server-side packets to their registered {@link PacketHandlerCommand}.
@@ -30,7 +30,7 @@ public class ServerPacketRouter {
 
     private static final Logger logger = LoggerFactory.getLogger(ServerPacketRouter.class);
 
-    private final Map<Class<?>, PacketHandlerCommand> handlers = new HashMap<>();
+    private final Map<Class<?>, PacketHandlerCommand> handlers = new ConcurrentHashMap<>();
 
     /** Registers a command for the given packet class. Returns {@code this} for chaining. */
     public <T> ServerPacketRouter register(Class<T> packetClass, PacketHandlerCommand command) {

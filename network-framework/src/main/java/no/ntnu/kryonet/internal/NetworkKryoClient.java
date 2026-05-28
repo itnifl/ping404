@@ -217,10 +217,12 @@ public class NetworkKryoClient implements INetworkClient {
     private void stopStaleDetectionThread() {
         if (staleDetectionThread != null) {
             staleDetectionThread.interrupt();
-            try {
-                staleDetectionThread.join(1000);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
+            if (Thread.currentThread() != staleDetectionThread) {
+                try {
+                    staleDetectionThread.join(1000);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
             }
             staleDetectionThread = null;
         }

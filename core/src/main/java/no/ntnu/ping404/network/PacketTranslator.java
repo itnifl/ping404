@@ -6,15 +6,21 @@ import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.HashSet;
 import java.util.IdentityHashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
-import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
 
 final class PacketTranslator {
 
     private static final String PING404_PREFIX = "no.ntnu.ping404.network.packets.";
     private static final String FRAMEWORK_PREFIX = "no.ntnu.kryonet.packets.";
+    private static final Object NO_CLASS = new Object();
+    private static final Map<String, Object> CLASS_CACHE = new ConcurrentHashMap<>();
+    private static final Map<Class<?>, Constructor<?>> CONSTRUCTOR_CACHE = new ConcurrentHashMap<>();
+    private static final Map<Class<?>, Field[]> INSTANCE_FIELDS_CACHE = new ConcurrentHashMap<>();
+    private static final Map<Class<?>, Map<String, Field>> TARGET_FIELDS_CACHE = new ConcurrentHashMap<>();
 
     private PacketTranslator() {}
 
@@ -59,10 +65,14 @@ final class PacketTranslator {
 
         String targetName = targetPrefix + sourceName.substring(sourcePrefix.length());
         try {
-            Class<?> targetClass = Class.forName(targetName);
+            Class<?> targetClass = resolveClass(targetName);
+            if (targetClass == null) {
+                return value;
+            }
             Object target = instantiate(targetClass);
             seen.put(value, target);
             copyFields(value, target, sourcePrefix, targetPrefix, seen);
+            normalizeTimestampFields(sourceClass, target.getClass(), target, sourcePrefix, targetPrefix);
             return target;
         } catch (ClassNotFoundException e) {
             // Preserve compatibility for packet types that exist only on one side.
@@ -101,7 +111,10 @@ final class PacketTranslator {
         String componentName = componentType.getName();
         if (componentName.startsWith(sourcePrefix)) {
             try {
-                targetComponentType = Class.forName(targetPrefix + componentName.substring(sourcePrefix.length()));
+                Class<?> resolved = resolveClass(targetPrefix + componentName.substring(sourcePrefix.length()));
+                if (resolved != null) {
+                    targetComponentType = resolved;
+                }
             } catch (ClassNotFoundException ignored) {
                 targetComponentType = componentType;
             }
@@ -124,7 +137,7 @@ final class PacketTranslator {
     }
 
     private static Object translateMap(Map<?, ?> map, String sourcePrefix, String targetPrefix, Map<Object, Object> seen) {
-        Map<Object, Object> translated = new java.util.LinkedHashMap<>();
+        Map<Object, Object> translated = new LinkedHashMap<>();
         seen.put(map, translated);
         for (Map.Entry<?, ?> entry : map.entrySet()) {
             translated.put(
@@ -145,32 +158,110 @@ final class PacketTranslator {
     }
 
     private static Object instantiate(Class<?> type) throws Exception {
-        Constructor<?> constructor = type.getDeclaredConstructor();
-        constructor.setAccessible(true);
+        Constructor<?> constructor = CONSTRUCTOR_CACHE.computeIfAbsent(type, PacketTranslator::resolveConstructor);
         return constructor.newInstance();
     }
 
     private static void copyFields(Object source, Object target, String sourcePrefix, String targetPrefix, Map<Object, Object> seen) throws IllegalAccessException {
-        Class<?> sourceClass = source.getClass();
-        for (Field sourceField : sourceClass.getDeclaredFields()) {
-            if (Modifier.isStatic(sourceField.getModifiers())) {
-                continue;
-            }
-            sourceField.setAccessible(true);
+        for (Field sourceField : getInstanceFields(source.getClass())) {
             Object fieldValue = sourceField.get(source);
             Object translatedValue = translate(fieldValue, sourcePrefix, targetPrefix, seen);
 
-            Field targetField;
-            try {
-                targetField = target.getClass().getDeclaredField(sourceField.getName());
-            } catch (NoSuchFieldException e) {
+            Field targetField = getTargetField(target.getClass(), sourceField.getName());
+            if (targetField == null || Modifier.isStatic(targetField.getModifiers())) {
                 continue;
             }
-            if (Modifier.isStatic(targetField.getModifiers())) {
-                continue;
-            }
-            targetField.setAccessible(true);
             targetField.set(target, translatedValue);
+        }
+    }
+
+    private static Class<?> resolveClass(String className) throws ClassNotFoundException {
+        Object cached = CLASS_CACHE.get(className);
+        if (cached == NO_CLASS) {
+            return null;
+        }
+        if (cached instanceof Class<?> clazz) {
+            return clazz;
+        }
+        try {
+            Class<?> resolved = Class.forName(className);
+            CLASS_CACHE.put(className, resolved);
+            return resolved;
+        } catch (ClassNotFoundException e) {
+            CLASS_CACHE.put(className, NO_CLASS);
+            throw e;
+        }
+    }
+
+    private static Constructor<?> resolveConstructor(Class<?> type) {
+        try {
+            Constructor<?> constructor = type.getDeclaredConstructor();
+            constructor.setAccessible(true);
+            return constructor;
+        } catch (Exception e) {
+            throw new IllegalStateException("No accessible no-args constructor for " + type.getName(), e);
+        }
+    }
+
+    private static Field[] getInstanceFields(Class<?> type) {
+        return INSTANCE_FIELDS_CACHE.computeIfAbsent(type, clazz -> {
+            Field[] declared = clazz.getDeclaredFields();
+            ArrayList<Field> fields = new ArrayList<>(declared.length);
+            for (Field field : declared) {
+                if (!Modifier.isStatic(field.getModifiers())) {
+                    field.setAccessible(true);
+                    fields.add(field);
+                }
+            }
+            return fields.toArray(new Field[0]);
+        });
+    }
+
+    private static Field getTargetField(Class<?> targetClass, String fieldName) {
+        Map<String, Field> fieldsByName = TARGET_FIELDS_CACHE.computeIfAbsent(targetClass, clazz -> {
+            Map<String, Field> map = new ConcurrentHashMap<>();
+            for (Field field : clazz.getDeclaredFields()) {
+                field.setAccessible(true);
+                map.put(field.getName(), field);
+            }
+            return map;
+        });
+        return fieldsByName.get(fieldName);
+    }
+
+    private static void normalizeTimestampFields(
+            Class<?> sourceClass,
+            Class<?> targetClass,
+            Object target,
+            String sourcePrefix,
+            String targetPrefix) {
+        String sourceName = sourceClass.getName();
+        if (sourceName.equals(sourcePrefix + "Ping")) {
+            convertLongField(targetClass, target, "timestamp", sourcePrefix, targetPrefix);
+            return;
+        }
+        if (sourceName.equals(sourcePrefix + "Pong")) {
+            convertLongField(targetClass, target, "originalTimestamp", sourcePrefix, targetPrefix);
+            convertLongField(targetClass, target, "serverTimestamp", sourcePrefix, targetPrefix);
+        }
+    }
+
+    private static void convertLongField(Class<?> targetClass, Object target, String fieldName, String sourcePrefix, String targetPrefix) {
+        Field field = getTargetField(targetClass, fieldName);
+        if (field == null || field.getType() != long.class) {
+            return;
+        }
+        try {
+            long raw = field.getLong(target);
+            if (raw < 0L) {
+                return;
+            }
+            if (PING404_PREFIX.equals(sourcePrefix) && FRAMEWORK_PREFIX.equals(targetPrefix)) {
+                field.setLong(target, TimeUnit.MILLISECONDS.toNanos(raw));
+            } else if (FRAMEWORK_PREFIX.equals(sourcePrefix) && PING404_PREFIX.equals(targetPrefix)) {
+                field.setLong(target, TimeUnit.NANOSECONDS.toMillis(raw));
+            }
+        } catch (IllegalAccessException ignored) {
         }
     }
 }

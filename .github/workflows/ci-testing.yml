@@ -8,14 +8,13 @@ jobs:
   test-server:
     name: Server tests
     runs-on: ubuntu-latest
-    continue-on-error: true
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
 
       - name: Set up Java 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9
         with:
           distribution: temurin
           java-version: '17'
@@ -24,12 +23,19 @@ jobs:
       - name: Make Gradle wrapper executable
         run: chmod +x gradlew
 
-      - name: Run server tests
-        run: ./gradlew :server:test
+      - name: Run server and framework tests
+        run: ./gradlew :server:test :network-framework:test
 
-      - name: Upload HTML test report
+      - name: Upload server HTML test report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: server-test-report
           path: server/build/reports/tests/test/
+
+      - name: Upload framework HTML test report
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: network-framework-test-report
+          path: network-framework/build/reports/tests/test/

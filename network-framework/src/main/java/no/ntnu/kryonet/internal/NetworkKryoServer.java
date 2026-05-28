@@ -7,6 +7,7 @@ import com.esotericsoftware.kryonet.Server;
 import no.ntnu.kryonet.core.INetworkServer;
 import no.ntnu.kryonet.core.NetworkConfig;
 import no.ntnu.kryonet.packets.Ping;
+import no.ntnu.kryonet.packets.Pong;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -71,7 +72,12 @@ public class NetworkKryoServer implements INetworkServer {
             @Override
             public void received(Connection connection, Object object) {
                 KryoPlayerConnection conn = connections.get(connection.getID());
-                if (conn != null) eventQueue.offer(new NetworkEvent(conn, EventType.RECEIVED, object));
+                if (conn != null) {
+                    if (object instanceof Pong) {
+                        conn.updateLastHeartbeat();
+                    }
+                    eventQueue.offer(new NetworkEvent(conn, EventType.RECEIVED, object));
+                }
             }
         });
     }
