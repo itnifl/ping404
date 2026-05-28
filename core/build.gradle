@@ -2,7 +2,7 @@
 eclipse.project.name = appName + '-core'
 
 dependencies {
-    implementation project(':network-framework')
+    implementation project(':kryonet-client-server')
     api "com.esotericsoftware:kryonet:${rootProject.ext.kryonetVersion}"
     api "com.badlogicgames.gdx:gdx:$gdxVersion"
     implementation 'org.slf4j:slf4j-api:2.0.9'

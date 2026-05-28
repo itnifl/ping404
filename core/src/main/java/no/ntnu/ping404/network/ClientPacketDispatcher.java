@@ -1,7 +1,7 @@
 package no.ntnu.ping404.network;
 
 import com.badlogic.gdx.Gdx;
-import no.ntnu.kryonet.dispatch.client.ThreadDispatcher;
+import no.creekcode.kryonet.dispatch.client.ThreadDispatcher;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;

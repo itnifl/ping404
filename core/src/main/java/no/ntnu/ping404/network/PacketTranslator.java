@@ -15,7 +15,7 @@ import java.util.concurrent.TimeUnit;
 final class PacketTranslator {
 
     private static final String PING404_PREFIX = "no.ntnu.ping404.network.packets.";
-    private static final String FRAMEWORK_PREFIX = "no.ntnu.kryonet.packets.";
+    private static final String FRAMEWORK_PREFIX = "no.creekcode.kryonet.packets.";
     private static final Object NO_CLASS = new Object();
     private static final Map<String, Object> CLASS_CACHE = new ConcurrentHashMap<>();
     private static final Map<Class<?>, Constructor<?>> CONSTRUCTOR_CACHE = new ConcurrentHashMap<>();

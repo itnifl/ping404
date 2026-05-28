@@ -3,7 +3,7 @@ package no.ntnu.ping404.network.packets;
 import com.badlogic.gdx.math.Vector2;
 import com.esotericsoftware.kryo.Kryo;
 import no.ntnu.ping404.model.GameState;
-import no.ntnu.kryonet.registry.FrameworkPacketRegistry;
+import no.creekcode.kryonet.registry.FrameworkPacketRegistry;
 
 public final class PacketRegistry {
 

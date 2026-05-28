@@ -12,15 +12,15 @@ import java.util.function.Consumer;
  */
 public class NetworkKryoClient implements INetworkClient {
 
-    private final no.ntnu.kryonet.core.INetworkClient delegate;
-    private final ConcurrentHashMap<NetworkListener, no.ntnu.kryonet.observer.NetworkListener> listenerBridges = new ConcurrentHashMap<>();
+    private final no.creekcode.kryonet.core.INetworkClient delegate;
+    private final ConcurrentHashMap<NetworkListener, no.creekcode.kryonet.observer.NetworkListener> listenerBridges = new ConcurrentHashMap<>();
 
     public NetworkKryoClient() {
         this(PacketRegistry::register);
     }
 
     public NetworkKryoClient(Consumer<Kryo> registrationCallback) {
-        this.delegate = new no.ntnu.kryonet.internal.NetworkKryoClient(kryo -> {
+        this.delegate = new no.creekcode.kryonet.internal.NetworkKryoClient(kryo -> {
             if (registrationCallback != null) {
                 registrationCallback.accept(kryo);
             }
@@ -55,7 +55,7 @@ public class NetworkKryoClient implements INetworkClient {
 
     @Override
     public void addListener(NetworkListener listener) {
-        no.ntnu.kryonet.observer.NetworkListener bridge = new no.ntnu.kryonet.observer.NetworkListener.Adapter() {
+        no.creekcode.kryonet.observer.NetworkListener bridge = new no.creekcode.kryonet.observer.NetworkListener.Adapter() {
             @Override
             public void onConnected() {
                 listener.onConnected();
@@ -76,7 +76,7 @@ public class NetworkKryoClient implements INetworkClient {
     }
 
     public void removeListener(NetworkListener listener) {
-        no.ntnu.kryonet.observer.NetworkListener bridge = listenerBridges.remove(listener);
+        no.creekcode.kryonet.observer.NetworkListener bridge = listenerBridges.remove(listener);
         if (bridge != null) {
             delegate.removeListener(bridge);
         }

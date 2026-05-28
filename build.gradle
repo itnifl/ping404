@@ -55,6 +55,6 @@ project(':server') {
     // Dedicated server application
 }
 
-project(':network-framework') {
+project(':kryonet-client-server') {
     // Reusable KryoNet networking framework
 }
