@@ -2,13 +2,36 @@
 
 This package provides a reusable KryoNet framework for multiplayer game networking.
 
+## Context
+
+| Field | Value |
+|---|---|
+| Module | kryonet-client-server |
+| Public namespace | no.creekcode.kryonet |
+| Role | Standalone networking framework used by game modules |
+| Transport support | TCP and UDP |
+| Primary integration style | Builder based API |
+
 It includes:
 
 - Packet registration with stable ordering
 - Server and client builders
 - Typed packet dispatching
-- Built in Ping, Pong, and Chat handlers
+- Built-in Ping, Pong, and Chat handlers
 - Configurable TCP or UDP transport routing
+
+## API quick reference
+
+| Area | Entry point | Typical use |
+|---|---|---|
+| Server build | `NetworkFramework.serverBuilder()` | Configure packets, handlers, and start server |
+| Client build | `NetworkFramework.clientBuilder()` | Configure packets/listeners and connect client |
+| Shared packets | `withFrameworkPackets()` | Register framework packet set on both ends |
+| Custom packets | `withPacket(MyPacket.class)` | Register game-specific packet types |
+| Direct server handlers | `withHandler(PacketType.class, handler)` | Inline packet handling per packet type |
+| Encapsulated handlers | `withCommandRegistry(registry)` | Apply reusable packet command mappings |
+| UDP routing | `unreliable(PacketType.class)` | Mark latency-sensitive packets for UDP |
+| Client thread dispatch | `withThreadDispatcher(dispatcher)` | Dispatch packet callbacks to render or UI thread |
 
 ## 1) Add dependency
 
@@ -35,7 +58,7 @@ The framework keeps registration deterministic:
 
 Use:
 
-- `withFrameworkPackets()` to register built in packets
+- `withFrameworkPackets()` to register built-in packets
 - `withPacket(MyPacket.class)` for each custom packet
 
 ## 3) Build a server
@@ -137,9 +160,9 @@ INetworkClient client = NetworkFramework.clientBuilder()
         .build();
 ```
 
-## 6) Use built in framework handlers
+## 6) Use built-in framework handlers
 
-Built in server handlers are available for:
+Built-in server handlers are available for:
 
 - `Ping.class`
 - `Pong.class`
@@ -253,3 +276,4 @@ client.sendUDP(new no.creekcode.kryonet.packets.Ping(1));
 - Prefer builders as the public entry point
 - Internal transport classes are in `no.creekcode.kryonet.internal`
 - Keep game specific logic in your own handlers and packet types
+- Keep packet registration identical on client and server, including order
