@@ -25,6 +25,142 @@ allprojects {
 
 ext {
     kryonetVersion = '2.22.0-RC1'
+    minimumJavaMajor = 17
+}
+
+def osName = System.getProperty('os.name').toLowerCase(Locale.ROOT)
+def isWindows = osName.contains('win')
+def isMac = osName.contains('mac')
+
+def defaultAndroidSdkDir = {
+    if (isWindows) {
+        return "${System.getProperty('user.home')}\\AppData\\Local\\Android\\Sdk"
+    }
+    if (isMac) {
+        return "${System.getProperty('user.home')}/Library/Android/sdk"
+    }
+    return "${System.getProperty('user.home')}/Android/Sdk"
+}
+
+def readSdkDirFromLocalProperties = {
+    File localProperties = rootProject.file('local.properties')
+    if (!localProperties.exists()) {
+        return null
+    }
+    Properties properties = new Properties()
+    localProperties.withInputStream { stream ->
+        properties.load(stream)
+    }
+    return properties.getProperty('sdk.dir')
+}
+
+def resolveAndroidSdkDir = {
+    def candidates = [
+            System.getenv('ANDROID_HOME'),
+            System.getenv('ANDROID_SDK_ROOT'),
+            readSdkDirFromLocalProperties(),
+            defaultAndroidSdkDir()
+    ]
+    return candidates.find { it != null && !it.trim().isEmpty() }
+}
+
+def javaInstallInstructions = '''
+Install Java 17 and re-run the command:
+- Windows (winget): winget install EclipseAdoptium.Temurin.17.JDK
+- macOS (Homebrew): brew install --cask temurin@17
+- Ubuntu or Debian: sudo apt-get update && sudo apt-get install -y openjdk-17-jdk
+Download: https://adoptium.net/temurin/releases/?version=17
+'''.stripIndent().trim()
+
+def androidInstallInstructions = '''
+Install Android SDK and configure one of ANDROID_HOME, ANDROID_SDK_ROOT, or local.properties.
+
+Download locations:
+- Android Studio and SDK Manager: https://developer.android.com/studio
+- Android command line tools: https://developer.android.com/studio#command-tools
+
+Environment variable examples:
+- Windows: setx ANDROID_HOME "%USERPROFILE%\\AppData\\Local\\Android\\Sdk"
+- macOS: export ANDROID_HOME="$HOME/Library/Android/sdk"
+- Linux: export ANDROID_HOME="$HOME/Android/Sdk"
+
+Then create local.properties in the project root when needed:
+- Windows: sdk.dir=C:\\\\Users\\\\<user>\\\\AppData\\\\Local\\\\Android\\\\Sdk
+- macOS: sdk.dir=/Users/<user>/Library/Android/sdk
+- Linux: sdk.dir=/home/<user>/Android/Sdk
+'''.stripIndent().trim()
+
+def shouldRequireAndroidSdkForRequestedTasks = {
+    List<String> requestedTasks = gradle.startParameter.taskNames
+    if (requestedTasks == null || requestedTasks.isEmpty()) {
+        return false
+    }
+
+    return requestedTasks.any { String taskPath ->
+        String normalized = taskPath.toLowerCase(Locale.ROOT)
+        normalized.contains(':android:') ||
+                normalized == 'test' ||
+                normalized == ':test' ||
+                normalized == 'check' ||
+                normalized == ':check' ||
+                normalized == 'build' ||
+                normalized == ':build' ||
+                normalized == 'assemble' ||
+                normalized == ':assemble' ||
+                normalized.contains('connected')
+    }
+}
+
+if (shouldRequireAndroidSdkForRequestedTasks()) {
+    String sdkDirCandidate = resolveAndroidSdkDir()
+    if (sdkDirCandidate == null || !file(sdkDirCandidate).exists()) {
+        throw new GradleException("Android SDK is required for the requested task set.\n\n${androidInstallInstructions}")
+    }
+}
+
+tasks.register('checkBasePrerequisites') {
+    group = 'verification'
+    description = 'Checks OS-invariant prerequisites required for all game and test tasks.'
+    doLast {
+        int currentJavaMajor = JavaVersion.current().majorVersion.toInteger()
+        if (currentJavaMajor < minimumJavaMajor) {
+            throw new GradleException("Java ${minimumJavaMajor}+ is required. Detected Java ${currentJavaMajor}.\n\n${javaInstallInstructions}")
+        }
+        logger.lifecycle("Prerequisite check passed: Java ${currentJavaMajor}")
+    }
+}
+
+tasks.register('checkAndroidPrerequisites') {
+    group = 'verification'
+    description = 'Checks Android SDK prerequisites for Android build and test tasks.'
+    dependsOn tasks.named('checkBasePrerequisites')
+    doLast {
+        String sdkDirCandidate = resolveAndroidSdkDir()
+        if (sdkDirCandidate == null) {
+            throw new GradleException("Android SDK was not found.\n\n${androidInstallInstructions}")
+        }
+
+        File sdkDir = file(sdkDirCandidate)
+        if (!sdkDir.exists()) {
+            throw new GradleException("Android SDK path was resolved but does not exist: ${sdkDir.absolutePath}\n\n${androidInstallInstructions}")
+        }
+        logger.lifecycle("Prerequisite check passed: Android SDK at ${sdkDir.absolutePath}")
+    }
+}
+
+tasks.register('checkPrerequisites') {
+    group = 'verification'
+    description = 'Runs all prerequisite checks needed before running game or tests.'
+    dependsOn tasks.named('checkBasePrerequisites')
+    doLast {
+        def sdkDirCandidate = resolveAndroidSdkDir()
+        if (sdkDirCandidate == null || !file(sdkDirCandidate).exists()) {
+            logger.lifecycle('Android SDK not detected. Android tasks will fail until SDK is installed and configured.')
+            logger.lifecycle(androidInstallInstructions)
+        } else {
+            logger.lifecycle("Android SDK detected at ${file(sdkDirCandidate).absolutePath}")
+        }
+    }
 }
 
 configure(subprojects - project(':android')) {
@@ -36,6 +172,25 @@ configure(subprojects - project(':android')) {
     compileJava {
         options.incremental = true
         options.encoding = 'UTF-8'
+    }
+}
+
+subprojects { subproject ->
+    if (subproject.path == ':android') {
+        subproject.tasks.configureEach { task ->
+            String taskName = task.name.toLowerCase(Locale.ROOT)
+            if (taskName.contains('test') || taskName.contains('assemble') || taskName.contains('bundle') || taskName.contains('install') || taskName.contains('connected')) {
+                task.dependsOn(rootProject.tasks.named('checkAndroidPrerequisites'))
+            }
+        }
+    } else {
+        subproject.tasks.withType(Test).configureEach {
+            dependsOn(rootProject.tasks.named('checkBasePrerequisites'))
+        }
+
+        subproject.tasks.matching { it.name == 'run' }.configureEach {
+            dependsOn(rootProject.tasks.named('checkBasePrerequisites'))
+        }
     }
 }
 

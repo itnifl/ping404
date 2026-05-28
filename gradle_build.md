@@ -5,8 +5,13 @@ This file explains both what is set and why it is set.
 ## Main project files
 
 - **build.gradle**
-  - Uses Android Gradle Plugin `8.7.3`.
+  - Uses Android Gradle Plugin `9.1.1`.
   - Why: this version works better with the current Android SDK tools and compile SDK level.
+  - Adds OS-invariant prerequisite tasks:
+    - `checkBasePrerequisites`
+    - `checkAndroidPrerequisites`
+    - `checkPrerequisites`
+  - Why: run and test tasks now fail early with actionable install commands and download links.
 
 - **gradle.properties**
   - Uses `android.suppressUnsupportedCompileSdk=35`.
@@ -60,3 +65,12 @@ You have to create it yourself, it is ignore by gitignore since this is specific
   - Why: Gradle needs the SDK location to compile Android code.
   - This file is machine-specific.
   - Why: each developer machine can have a different SDK path.
+
+## Prerequisite commands
+
+- Run before game or tests:
+  - Windows: `.\\gradlew.bat checkPrerequisites`
+  - macOS/Linux: `./gradlew checkPrerequisites`
+- Run before Android specific tasks:
+  - Windows: `.\\gradlew.bat checkAndroidPrerequisites`
+  - macOS/Linux: `./gradlew checkAndroidPrerequisites`
