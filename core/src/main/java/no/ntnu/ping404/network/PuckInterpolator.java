@@ -38,6 +38,18 @@ public class PuckInterpolator {
     private static final float BLEND_RATE = 10f;
 
     /**
+     * Lead-compensation time used to cancel the steady-state lag of a first-order
+     * exponential filter when tracking a target moving at constant velocity.
+     *
+     * <p>For an exponential filter with rate {@code k}, the render position lags a
+     * constantly moving target by {@code v / k} pixels at steady state. Adding
+     * {@code v * (1 / k)} to the target makes the steady-state error zero, which
+     * removes the visible trailing effect at high puck speeds while preserving the
+     * smoothing for direction changes and network jitter.</p>
+     */
+    private static final float LEAD_COMPENSATION_TIME = 1f / BLEND_RATE;
+
+    /**
      * Maximum extrapolation time (seconds) before stopping velocity-based prediction.
      * Servers send snapshots at ~20-30 Hz (33-50ms interval). Capping extrapolation at 200ms
      * (6-7 snapshots) prevents unbounded position drift if network stalls or becomes unidirectional.
@@ -77,11 +89,19 @@ public class PuckInterpolator {
             renderPosition.set(position);
             initialized = true;
         } else {
-            float deviation = renderPosition.dst(authoritativePosition);
+            // Snap when the render position deviates from where it would naturally sit at
+            // this instant (authoritative position adjusted for lead compensation). Comparing
+            // against the lead-compensated reference avoids spurious snaps at high speeds
+            // where the render position is intentionally ahead of the raw authoritative one.
+            float leadX = authoritativePosition.x + authoritativeVelocity.x * LEAD_COMPENSATION_TIME;
+            float leadY = authoritativePosition.y + authoritativeVelocity.y * LEAD_COMPENSATION_TIME;
+            float dx = renderPosition.x - leadX;
+            float dy = renderPosition.y - leadY;
+            float deviation = (float) Math.sqrt(dx * dx + dy * dy);
             if (deviation > SNAP_THRESHOLD) {
-                renderPosition.set(authoritativePosition);
+                renderPosition.set(leadX, leadY);
             }
-            // Deviations within threshold are blended smoothly in update()
+            // Deviations within threshold are blended smoothly in update().
         }
 
         timeSinceUpdate = 0f;
@@ -99,8 +119,12 @@ public class PuckInterpolator {
         timeSinceUpdate += deltaTime;
 
         float extrapolationTime = Math.min(timeSinceUpdate, MAX_EXTRAPOLATION_TIME);
-        float targetX = authoritativePosition.x + authoritativeVelocity.x * extrapolationTime;
-        float targetY = authoritativePosition.y + authoritativeVelocity.y * extrapolationTime;
+        // Lead-compensated target removes steady-state lag of the exponential smoother
+        // at high constant velocities (e.g. fast puck shots), while the smoother still
+        // dampens jitter and direction changes.
+        float leadTime = extrapolationTime + LEAD_COMPENSATION_TIME;
+        float targetX = authoritativePosition.x + authoritativeVelocity.x * leadTime;
+        float targetY = authoritativePosition.y + authoritativeVelocity.y * leadTime;
 
         float blendFactor = 1f - (float) Math.exp(-BLEND_RATE * deltaTime);
         renderPosition.x += (targetX - renderPosition.x) * blendFactor;
