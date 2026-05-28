@@ -487,6 +487,8 @@ class ConcurrencyAndAvailabilityTest {
         CountDownLatch conn1 = new CountDownLatch(1);
         // conn2: waits for client2 to connect.
         CountDownLatch conn2 = new CountDownLatch(1);
+        CountDownLatch login1 = new CountDownLatch(1);
+        CountDownLatch login2 = new CountDownLatch(1);
 
         // positionReceived: waits until client2 receives the measured PlayerPosition packet.
         CountDownLatch positionReceived = new CountDownLatch(1);
@@ -495,22 +497,31 @@ class ConcurrencyAndAvailabilityTest {
       
         // CI-aware tuning: slower runners need wider budgets and longer setup delays.
         long latencyBudgetMs     = isCI ? 500  : POSITION_LATENCY_BUDGET_MS;
-        long loginDelayMs        = isCI ? 600  : LOGIN_PROCESSING_DELAY_MS;
+        long loginTimeoutSeconds = isCI ? 4    : PACKET_TIMEOUT_SECONDS;
         // Send several warmup packets so at least one establishes the UDP address on both ends.
-        int  warmupPacketCount   = isCI ? 5    : 2;
-        long warmupDelayMs       = isCI ? 500  : UDP_WARMUP_DELAY_MS;
+        int  warmupPacketCount   = isCI ? 8    : 2;
+        long warmupDelayMs       = isCI ? 700  : UDP_WARMUP_DELAY_MS;
         // Per-attempt budget for the actual test packet; if exceeded the packet is treated as dropped.
-        long perAttemptTimeoutMs = isCI ? 1000 : 400;
+        long perAttemptTimeoutMs = isCI ? 1500 : 400;
         // Maximum number of send attempts before failing (handles rare UDP packet loss).
-        int  maxSendAttempts     = 5;
+        int  maxSendAttempts     = isCI ? 10 : 5;
 
         client1.addListener(new NetworkListener.Adapter() {
             @Override public void onConnected() { conn1.countDown(); }
+            @Override
+            public void onReceived(Object packet) {
+                if (packet instanceof LoginResponse lr && lr.success) {
+                    login1.countDown();
+                }
+            }
         });
         client2.addListener(new NetworkListener.Adapter() {
             @Override public void onConnected() { conn2.countDown(); }
             @Override
             public void onReceived(Object packet) {
+                if (packet instanceof LoginResponse lr && lr.success) {
+                    login2.countDown();
+                }
                 if (packet instanceof PlayerPosition pos) {
                     // Only count the real test position, not warm-up positions.
                     if (pos.x == TEST_POS_X && pos.y == TEST_POS_Y) {
@@ -532,7 +543,8 @@ class ConcurrencyAndAvailabilityTest {
 
             client1.sendTCP(new LoginRequest(PLAYER_1_NAME));
             client2.sendTCP(new LoginRequest(PLAYER_2_NAME));
-            Thread.sleep(loginDelayMs);
+            assertTrue(login1.await(loginTimeoutSeconds, TimeUnit.SECONDS), "Client1 login response not received");
+            assertTrue(login2.await(loginTimeoutSeconds, TimeUnit.SECONDS), "Client2 login response not received");
 
             GameRoom activeRoom = null;
             long roomReadyDeadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(isCI ? 3000 : 1200);
