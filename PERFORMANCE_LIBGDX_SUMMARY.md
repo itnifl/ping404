@@ -455,23 +455,28 @@ private static boolean isUnreliable(Object packet) {
 }
 ```
 
-### 5.7 Client interpolation and bounded extrapolation
+### 5.7 Client interpolation, bounded extrapolation and lead compensation
 
 From [core/src/main/java/no/ntnu/ping404/network/PuckInterpolator.java](core/src/main/java/no/ntnu/ping404/network/PuckInterpolator.java):
 
 ```java
 timeSinceUpdate += deltaTime;
 float extrapolationTime = Math.min(timeSinceUpdate, MAX_EXTRAPOLATION_TIME);
-float targetX = authoritativePosition.x + authoritativeVelocity.x * extrapolationTime;
-float targetY = authoritativePosition.y + authoritativeVelocity.y * extrapolationTime;
+
+// Lead compensation cancels the steady state lag (v / BLEND_RATE) of a first
+// order exponential smoother, so the puck does not visibly trail at high speeds.
+float leadTime = extrapolationTime + LEAD_COMPENSATION_TIME;
+float targetX = authoritativePosition.x + authoritativeVelocity.x * leadTime;
+float targetY = authoritativePosition.y + authoritativeVelocity.y * leadTime;
 
 // Frame rate independent exponential blend
 float blendFactor = 1f - (float) Math.exp(-BLEND_RATE * deltaTime);
 renderPosition.x += (targetX - renderPosition.x) * blendFactor;
 renderPosition.y += (targetY - renderPosition.y) * blendFactor;
 
+// Snap when the render position deviates from the lead compensated reference
 if (deviation > SNAP_THRESHOLD) {
-    renderPosition.set(authoritativePosition); // hard snap on large divergence
+    renderPosition.set(leadX, leadY); // hard snap on large divergence
 }
 ```
 
