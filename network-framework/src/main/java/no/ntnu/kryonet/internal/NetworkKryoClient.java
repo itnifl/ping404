@@ -198,7 +198,6 @@ public class NetworkKryoClient implements INetworkClient {
     @Override
     public void dispose() {
         disconnect();
-        client.stop();
     }
 
     private void stopBackgroundThreads() {
