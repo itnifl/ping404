@@ -69,8 +69,8 @@ You have to create it yourself, it is ignore by gitignore since this is specific
 ## Prerequisite commands
 
 - Run before game or tests:
-  - Windows: `.\\gradlew.bat checkPrerequisites`
+  - Windows: `.\gradlew.bat checkPrerequisites`
   - macOS/Linux: `./gradlew checkPrerequisites`
-- Run before Android specific tasks:
-  - Windows: `.\\gradlew.bat checkAndroidPrerequisites`
+- Run before Android-specific tasks:
+  - Windows: `.\gradlew.bat checkAndroidPrerequisites`
   - macOS/Linux: `./gradlew checkAndroidPrerequisites`

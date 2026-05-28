@@ -10,14 +10,14 @@ This package provides a reusable KryoNet framework for multiplayer game networki
 | Public namespace | no.creekcode.kryonet |
 | Role | Standalone networking framework used by game modules |
 | Transport support | TCP and UDP |
-| Primary integration style | Builder based API |
+| Primary integration style | Builder-based API |
 
 It includes:
 
 - Packet registration with stable ordering
 - Server and client builders
 - Typed packet dispatching
-- Built-in Ping, Pong, and Chat handlers
+- Built-in Ping, Pong, and ChatMessage handlers
 - Configurable TCP or UDP transport routing
 
 ## API quick reference

@@ -28,7 +28,7 @@ Run this first on any OS:
 ./gradlew checkPrerequisites
 ```
 
-For Android specific tasks, run:
+For Android-specific tasks, run:
 
 ```bash
 # Windows
