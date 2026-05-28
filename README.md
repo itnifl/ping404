@@ -11,9 +11,139 @@ Ping404 is a multi-module Gradle project with these modules:
 
 - Java 17 (minimum)
 - Gradle Wrapper (already included in this repository)
+- Android SDK (required for Android build and Android unit tests)
 - **For diagram viewing**: If using VS Code, install a Mermaid viewer extension:
   - **VS Code**: [Mermaid Preview](https://marketplace.visualstudio.com/items?itemName=vstirbu.vscode-mermaid-preview) or the [official Mermaid extension](https://marketplace.visualstudio.com/items?itemName=mermaidchart.vscode-mermaid-chart)
   - **Android Studio**: Does not have built-in Mermaid support; diagrams are primarily for documentation and can be viewed in VS Code or a browser-based markdown viewer
+
+## Prerequisite Checks Before Running Or Testing
+
+Run this first on any OS:
+
+```bash
+# Windows
+.\gradlew.bat checkPrerequisites
+
+# macOS or Linux
+./gradlew checkPrerequisites
+```
+
+For Android-specific tasks, run:
+
+```bash
+# Windows
+.\gradlew.bat checkAndroidPrerequisites
+
+# macOS or Linux
+./gradlew checkAndroidPrerequisites
+```
+
+The build is now wired so prerequisite checks run automatically before game run tasks and test tasks.
+
+## Install Commands And Download Locations
+
+### Java 17
+
+Download:
+- https://adoptium.net/temurin/releases/?version=17
+
+Install commands:
+- Windows: `winget install EclipseAdoptium.Temurin.17.JDK`
+- macOS: `brew install --cask temurin@17`
+- Ubuntu or Debian: `sudo apt-get update && sudo apt-get install -y openjdk-17-jdk`
+
+### Android SDK
+
+Download:
+- Android Studio and SDK Manager: https://developer.android.com/studio
+- Android command line tools: https://developer.android.com/studio#command-tools
+
+Set SDK location with one of these:
+- Environment variable `ANDROID_HOME`
+- Environment variable `ANDROID_SDK_ROOT`
+- `local.properties` in repo root with `sdk.dir=...`
+
+Common SDK paths:
+- Windows: `C:\Users\<user>\AppData\Local\Android\Sdk`
+- macOS: `/Users/<user>/Library/Android/sdk`
+- Linux: `/home/<user>/Android/Sdk`
+
+Windows command example:
+
+```powershell
+setx ANDROID_HOME "%USERPROFILE%\AppData\Local\Android\Sdk"
+```
+
+macOS or Linux command example:
+
+```bash
+export ANDROID_HOME="$HOME/Library/Android/sdk" # macOS
+export ANDROID_HOME="$HOME/Android/Sdk"         # Linux
+```
+
+## Troubleshooting Prerequisite Detection
+
+If prerequisite checks fail, use the steps below.
+
+### 1. Confirm Java is available
+
+```bash
+java -version
+```
+
+If this command fails, install Java 17 using the commands listed above.
+
+### 2. Confirm Android SDK path exists
+
+Windows PowerShell:
+
+```powershell
+Test-Path "$env:ANDROID_HOME"
+Test-Path "$env:ANDROID_SDK_ROOT"
+```
+
+macOS or Linux:
+
+```bash
+test -d "$ANDROID_HOME" && echo "ANDROID_HOME ok"
+test -d "$ANDROID_SDK_ROOT" && echo "ANDROID_SDK_ROOT ok"
+```
+
+If both are unset or invalid, set one variable and restart your terminal.
+
+### 3. Configure local.properties fallback
+
+Create or update `local.properties` in the repository root with:
+
+```properties
+sdk.dir=<absolute-sdk-path>
+```
+
+Example on Windows:
+
+```properties
+sdk.dir=C:\\Users\\<user>\\AppData\\Local\\Android\\Sdk
+```
+
+### 4. Re-run checks
+
+```bash
+# Windows
+.\gradlew.bat checkPrerequisites
+
+# macOS or Linux
+./gradlew checkPrerequisites
+```
+
+For Android tasks:
+
+```bash
+# Windows
+.\gradlew.bat checkAndroidPrerequisites
+
+# macOS or Linux
+./gradlew checkAndroidPrerequisites
+```
 
 Use:
 - Windows: `gradlew.bat ...`
