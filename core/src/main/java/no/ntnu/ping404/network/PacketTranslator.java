@@ -64,6 +64,9 @@ final class PacketTranslator {
             seen.put(value, target);
             copyFields(value, target, sourcePrefix, targetPrefix, seen);
             return target;
+        } catch (ClassNotFoundException e) {
+            // Preserve compatibility for packet types that exist only on one side.
+            return value;
         } catch (Exception e) {
             throw new IllegalStateException("Failed to translate packet class from "
                     + sourceName + " to " + targetName
@@ -83,6 +86,8 @@ final class PacketTranslator {
         try {
             Class<?> targetClass = Class.forName(targetName);
             return Enum.valueOf((Class<? extends Enum>) targetClass, value.name());
+        } catch (ClassNotFoundException e) {
+            return value;
         } catch (Exception e) {
             throw new IllegalStateException("Failed to translate enum "
                     + value.getClass().getName() + " to " + targetName, e);
